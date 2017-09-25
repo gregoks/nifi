@@ -17,14 +17,13 @@
 package org.apache.nifi.hbase;
 
 import org.apache.hadoop.hbase.Cell;
-import org.apache.hadoop.hbase.client.Connection;
-import org.apache.hadoop.hbase.client.Put;
-import org.apache.hadoop.hbase.client.Result;
-import org.apache.hadoop.hbase.client.ResultScanner;
-import org.apache.hadoop.hbase.client.Table;
+import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.filter.Filter;
 import org.apache.nifi.controller.ConfigurationContext;
 import org.apache.nifi.hadoop.KerberosProperties;
+import org.apache.nifi.hbase.increment.IncrementColumn;
+import org.apache.nifi.hbase.increment.IncrementFlowFile;
 import org.apache.nifi.hbase.put.PutColumn;
 import org.apache.nifi.hbase.scan.Column;
 import org.mockito.Mockito;
@@ -103,6 +102,45 @@ public class MockHBaseClientService extends HBase_1_1_2_ClientService {
         when(result.getRow()).thenReturn(rowArray);
         when(result.rawCells()).thenReturn(cellArray);
         results.add(result);
+    }
+
+    @Override
+    public void increment(String tableName, byte[] rowId, Collection<IncrementColumn> columns) throws IOException {
+        //try (final Table table = connection.getTable(TableName.valueOf(tableName))) {
+            Increment inc = new Increment(rowId);
+            for (final IncrementColumn column : columns) {
+                inc.addColumn(column.getColumnFamily(),
+                        column.getColumnQualifier(),
+                        column.getDelta());
+            }
+
+            table.increment(inc);
+        //}
+    }
+
+    @Override
+    public void increment(String tableName, Collection<IncrementFlowFile> increments) throws IOException {
+        // Create one Put per row....
+        final Map<String, Increment> rowIncs = new HashMap<>();
+        for (final IncrementFlowFile incrementFlowFile : increments) {
+            //this is used for the map key as a byte[] does not work as a key.
+            final String rowKeyString = new String(incrementFlowFile.getRow(), StandardCharsets.UTF_8);
+            Increment inc = rowIncs.get(rowKeyString);
+            if (inc == null) {
+                inc = new Increment(incrementFlowFile.getRow());
+                rowIncs.put(rowKeyString, inc);
+            }
+
+            for (final IncrementColumn column : incrementFlowFile.getColumns()) {
+
+                inc.addColumn(
+                        column.getColumnFamily(),
+                        column.getColumnQualifier(),
+                        column.getDelta().longValue());
+
+            }
+            table.increment(inc);
+        }
     }
 
     @Override

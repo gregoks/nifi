@@ -18,6 +18,8 @@ package org.apache.nifi.hbase;
 
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.nifi.controller.AbstractControllerService;
+import org.apache.nifi.hbase.increment.IncrementColumn;
+import org.apache.nifi.hbase.increment.IncrementFlowFile;
 import org.apache.nifi.hbase.put.PutColumn;
 import org.apache.nifi.hbase.put.PutFlowFile;
 import org.apache.nifi.hbase.scan.Column;
@@ -37,6 +39,7 @@ import java.util.Map;
 public class MockHBaseClientService extends AbstractControllerService implements HBaseClientService {
 
     private Map<String,ResultCell[]> results = new HashMap<>();
+    private Map<String, List<IncrementFlowFile>> flowFileInc = new HashMap<>();
     private Map<String, List<PutFlowFile>> flowFilePuts = new HashMap<>();
     private boolean throwException = false;
     private int numScans = 0;
@@ -54,6 +57,27 @@ public class MockHBaseClientService extends AbstractControllerService implements
         }
 
         this.flowFilePuts.put(tableName, new ArrayList<>(puts));
+    }
+
+    @Override
+    public void increment(String tableName, Collection<IncrementFlowFile> increments) throws IOException {
+        if (throwException) {
+            throw new IOException("exception");
+        }
+
+        if (testFailure) {
+            if (++numPuts == failureThreshold) {
+                throw new IOException();
+            }
+        }
+
+        this.flowFileInc.put(tableName, new ArrayList<>(increments));
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void increment(String tableName, byte[] rowId, Collection<IncrementColumn> columns) throws IOException {
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -156,6 +180,10 @@ public class MockHBaseClientService extends AbstractControllerService implements
 
     public Map<String, List<PutFlowFile>> getFlowFilePuts() {
         return flowFilePuts;
+    }
+
+    public Map<String, List<IncrementFlowFile>> getFlowFileInc() {
+        return flowFileInc;
     }
 
     public void setThrowException(boolean throwException) {

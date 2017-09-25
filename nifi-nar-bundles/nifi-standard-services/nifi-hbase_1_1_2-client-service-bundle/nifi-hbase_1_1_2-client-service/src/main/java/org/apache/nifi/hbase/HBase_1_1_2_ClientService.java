@@ -22,15 +22,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.TableName;
-import org.apache.hadoop.hbase.client.Admin;
-import org.apache.hadoop.hbase.client.Connection;
-import org.apache.hadoop.hbase.client.ConnectionFactory;
-import org.apache.hadoop.hbase.client.Put;
-import org.apache.hadoop.hbase.client.Delete;
-import org.apache.hadoop.hbase.client.Result;
-import org.apache.hadoop.hbase.client.ResultScanner;
-import org.apache.hadoop.hbase.client.Scan;
-import org.apache.hadoop.hbase.client.Table;
+import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.filter.Filter;
 import org.apache.hadoop.hbase.filter.ParseFilter;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -50,6 +42,8 @@ import org.apache.nifi.controller.ControllerServiceInitializationContext;
 import org.apache.nifi.hadoop.KerberosProperties;
 import org.apache.nifi.hadoop.KerberosTicketRenewer;
 import org.apache.nifi.hadoop.SecurityUtil;
+import org.apache.nifi.hbase.increment.IncrementColumn;
+import org.apache.nifi.hbase.increment.IncrementFlowFile;
 import org.apache.nifi.hbase.put.PutColumn;
 import org.apache.nifi.hbase.put.PutFlowFile;
 import org.apache.nifi.hbase.scan.Column;
@@ -265,6 +259,48 @@ public class HBase_1_1_2_ClientService extends AbstractControllerService impleme
                 connection.close();
             } catch (final IOException ioe) {
                 getLogger().warn("Failed to close connection to HBase due to {}", new Object[]{ioe});
+            }
+        }
+    }
+
+
+    @Override
+    public void increment(String tableName, byte[] rowId, Collection<IncrementColumn> columns) throws IOException {
+        try (final Table table = connection.getTable(TableName.valueOf(tableName))) {
+            Increment inc = new Increment(rowId);
+            for (final IncrementColumn column : columns) {
+                inc.addColumn(column.getColumnFamily(),
+                        column.getColumnQualifier(),
+                        column.getDelta());
+            }
+
+            table.increment(inc);
+        }
+    }
+
+    @Override
+    public void increment(final String tableName, final Collection<IncrementFlowFile> increments) throws IOException {
+        try (final Table table = connection.getTable(TableName.valueOf(tableName))) {
+            // Create one Put per row....
+            final Map<String, Increment> rowIncs = new HashMap<>();
+            for (final IncrementFlowFile incrementFlowFile : increments) {
+                //this is used for the map key as a byte[] does not work as a key.
+                final String rowKeyString = new String(incrementFlowFile.getRow(), StandardCharsets.UTF_8);
+                Increment inc = rowIncs.get(rowKeyString);
+                if (inc == null) {
+                    inc = new Increment(incrementFlowFile.getRow());
+                    rowIncs.put(rowKeyString, inc);
+                }
+
+                for (final IncrementColumn column : incrementFlowFile.getColumns()) {
+
+                        inc.addColumn(
+                                column.getColumnFamily(),
+                                column.getColumnQualifier(),
+                                column.getDelta().longValue());
+
+                }
+                table.increment(inc);
             }
         }
     }

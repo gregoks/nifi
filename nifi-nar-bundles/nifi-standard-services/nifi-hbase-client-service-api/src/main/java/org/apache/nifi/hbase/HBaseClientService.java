@@ -20,6 +20,8 @@ import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.controller.ControllerService;
+import org.apache.nifi.hbase.increment.IncrementColumn;
+import org.apache.nifi.hbase.increment.IncrementFlowFile;
 import org.apache.nifi.hbase.put.PutColumn;
 import org.apache.nifi.hbase.put.PutFlowFile;
 import org.apache.nifi.hbase.scan.Column;
@@ -74,6 +76,28 @@ public interface HBaseClientService extends ControllerService {
             .expressionLanguageSupported(true)
             .dynamicallyModifiesClasspath(true)
             .build();
+
+
+
+    /**
+     * Increments the given row columns in HBase with the provided columns.
+     *
+     * @param tableName the name of an HBase table
+     * @param rowId the id of the row to put
+     * @param columns the columns of the row to put
+     * @throws IOException thrown when there are communication errors with HBase
+     */
+    void increment(String tableName, byte[] rowId, Collection<IncrementColumn> columns) throws IOException;
+
+
+    /**
+     * Puts a batch of increment mutations to the given table.
+     *
+     * @param tableName the name of an HBase table
+     * @param increments a list of increment mutations for the given table
+     * @throws IOException thrown when there are communication errors with HBase
+     */
+    void increment(String tableName, Collection<IncrementFlowFile> increments) throws IOException;
 
     /**
      * Puts a batch of mutations to the given table.
