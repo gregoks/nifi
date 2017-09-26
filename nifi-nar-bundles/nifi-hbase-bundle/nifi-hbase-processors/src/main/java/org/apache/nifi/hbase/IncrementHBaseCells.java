@@ -123,7 +123,7 @@ public class IncrementHBaseCells extends AbstractWriteHBase {
             }
         }
 
-        getLogger().debug("Sending {} FlowFiles to HBase in {} put operations", new Object[]{flowFiles.size(), tableIncrements.size()});
+        getLogger().debug("Sending {} FlowFiles to HBase in {} increment operations", new Object[]{flowFiles.size(), tableIncrements.size()});
 
         final long start = System.nanoTime();
         final List<IncrementFlowFile> successes = new ArrayList<>();
@@ -147,6 +147,14 @@ public class IncrementHBaseCells extends AbstractWriteHBase {
         getLogger().debug("Sent {} FlowFiles to HBase successfully in {} milliseconds", new Object[]{successes.size(), sendMillis});
 
         for (IncrementFlowFile incrementFlowFile : successes) {
+            StringBuilder sb = new StringBuilder("{");
+            for(IncrementColumn col : incrementFlowFile.getColumns()){
+                if(sb.length() > 1)
+                    sb.append(",");
+                sb.append(col.toString());
+            }
+            sb.append("}");
+            session.putAttribute(incrementFlowFile.getFlowFile(),"incremented",sb.toString());
             session.transfer(incrementFlowFile.getFlowFile(), REL_SUCCESS);
             final String details = "Put " + incrementFlowFile.getColumns().size() + " cells to HBase";
             session.getProvenanceReporter().send(incrementFlowFile.getFlowFile(), getTransitUri(incrementFlowFile), details, sendMillis);
