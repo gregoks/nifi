@@ -300,7 +300,7 @@ public class HBase_1_1_2_ClientService extends AbstractControllerService impleme
                                 column.getDelta());
 
                 }
-                getLogger().warn(inc.toString());
+
                 table.increment(inc);
             }
         }
