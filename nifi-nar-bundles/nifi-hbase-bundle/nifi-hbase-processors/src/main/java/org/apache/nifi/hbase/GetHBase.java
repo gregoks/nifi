@@ -110,6 +110,23 @@ public class GetHBase extends  AbstractScanHBase{
         return properties;
     }
 
+    @Override
+    protected Collection<ValidationResult> customValidate(ValidationContext validationContext) {
+        final String columns = validationContext.getProperty(COLUMNS).getValue();
+        final String filter = validationContext.getProperty(FILTER_EXPRESSION).getValue();
+
+        final List<ValidationResult> problems = new ArrayList<>();
+
+        if (!StringUtils.isBlank(columns) && !StringUtils.isBlank(filter)) {
+            problems.add(new ValidationResult.Builder()
+                    .subject(FILTER_EXPRESSION.getDisplayName())
+                    .input(filter).valid(false)
+                    .explanation("a filter expression can not be used in conjunction with the Columns property")
+                    .build());
+        }
+
+        return problems;
+    }
 
     @Override
     public void onPropertyModified(final PropertyDescriptor descriptor, final String oldValue, final String newValue) {
