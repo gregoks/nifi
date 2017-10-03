@@ -90,79 +90,12 @@ import org.apache.nifi.processor.util.StandardValidators;
 @Stateful(scopes = Scope.CLUSTER, description = "After performing a fetching from HBase, stores a timestamp of the last-modified cell that was found. In addition, it stores the ID of the row(s) "
     + "and the value of each cell that has that timestamp as its modification date. This is stored across the cluster and allows the next fetch to avoid duplicating data, even if this Processor is "
     + "run on Primary Node only and the Primary Node changes.")
-public class GetHBase extends AbstractProcessor {
+public class GetHBase extends  AbstractScanHBase{
 
-    static final Pattern COLUMNS_PATTERN = Pattern.compile("\\w+(:\\w+)?(?:,\\w+(:\\w+)?)*");
 
-    static final AllowableValue NONE = new AllowableValue("None", "None");
-    static final AllowableValue CURRENT_TIME = new AllowableValue("Current Time", "Current Time");
-
-    static final PropertyDescriptor HBASE_CLIENT_SERVICE = new PropertyDescriptor.Builder()
-            .name("HBase Client Service")
-            .description("Specifies the Controller Service to use for accessing HBase.")
-            .required(true)
-            .identifiesControllerService(HBaseClientService.class)
-            .build();
-    static final PropertyDescriptor DISTRIBUTED_CACHE_SERVICE = new PropertyDescriptor.Builder()
-            .name("Distributed Cache Service")
-            .description("Specifies the Controller Service that should be used to maintain state about what has been pulled from HBase" +
-                    " so that if a new node begins pulling data, it won't duplicate all of the work that has been done.")
-            .required(false)
-            .identifiesControllerService(DistributedMapCacheClient.class)
-            .build();
-    static final PropertyDescriptor CHARSET = new PropertyDescriptor.Builder()
-            .name("Character Set")
-            .description("Specifies which character set is used to encode the data in HBase")
-            .required(true)
-            .defaultValue("UTF-8")
-            .addValidator(StandardValidators.CHARACTER_SET_VALIDATOR)
-            .build();
-    static final PropertyDescriptor TABLE_NAME = new PropertyDescriptor.Builder()
-            .name("Table Name")
-            .description("The name of the HBase Table to put data into")
-            .required(true)
-            .expressionLanguageSupported(false)
-            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
-            .build();
-    static final PropertyDescriptor COLUMNS = new PropertyDescriptor.Builder()
-            .name("Columns")
-            .description("A comma-separated list of \"<colFamily>:<colQualifier>\" pairs to return when scanning. To return all columns " +
-                    "for a given family, leave off the qualifier such as \"<colFamily1>,<colFamily2>\".")
-            .required(false)
-            .expressionLanguageSupported(false)
-            .addValidator(StandardValidators.createRegexMatchingValidator(COLUMNS_PATTERN))
-            .build();
-    static final PropertyDescriptor FILTER_EXPRESSION = new PropertyDescriptor.Builder()
-            .name("Filter Expression")
-            .description("An HBase filter expression that will be applied to the scan. This property can not be used when also using the Columns property.")
-            .required(false)
-            .expressionLanguageSupported(false)
-            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
-            .build();
-    static final PropertyDescriptor INITIAL_TIMERANGE = new PropertyDescriptor.Builder()
-            .name("Initial Time Range")
-            .description("The time range to use on the first scan of a table. None will pull the entire table on the first scan, " +
-                    "Current Time will pull entries from that point forward.")
-            .required(true)
-            .expressionLanguageSupported(false)
-            .allowableValues(NONE, CURRENT_TIME)
-            .defaultValue(NONE.getValue())
-            .build();
-
-    static final Relationship REL_SUCCESS = new Relationship.Builder()
-            .name("success")
-            .description("All FlowFiles are routed to this relationship")
-            .build();
 
     private volatile ScanResult lastResult = null;
-    private volatile List<Column> columns = new ArrayList<>();
-    private volatile boolean justElectedPrimaryNode = false;
-    private volatile String previousTable = null;
-
-    @Override
-    public Set<Relationship> getRelationships() {
-        return Collections.singleton(REL_SUCCESS);
-    }
+    protected volatile boolean justElectedPrimaryNode = false;
 
     @Override
     protected List<PropertyDescriptor> getSupportedPropertyDescriptors() {
@@ -177,23 +110,6 @@ public class GetHBase extends AbstractProcessor {
         return properties;
     }
 
-    @Override
-    protected Collection<ValidationResult> customValidate(ValidationContext validationContext) {
-        final String columns = validationContext.getProperty(COLUMNS).getValue();
-        final String filter = validationContext.getProperty(FILTER_EXPRESSION).getValue();
-
-        final List<ValidationResult> problems = new ArrayList<>();
-
-        if (!StringUtils.isBlank(columns) && !StringUtils.isBlank(filter)) {
-            problems.add(new ValidationResult.Builder()
-                    .subject(FILTER_EXPRESSION.getDisplayName())
-                    .input(filter).valid(false)
-                    .explanation("a filter expression can not be used in conjunction with the Columns property")
-                    .build());
-        }
-
-        return problems;
-    }
 
     @Override
     public void onPropertyModified(final PropertyDescriptor descriptor, final String oldValue, final String newValue) {
@@ -216,22 +132,7 @@ public class GetHBase extends AbstractProcessor {
 
             clearState(client);
         }
-
-        final String columnsValue = context.getProperty(COLUMNS).getValue();
-        final String[] columns = (columnsValue == null || columnsValue.isEmpty() ? new String[0] : columnsValue.split(","));
-
-        this.columns.clear();
-        for (final String column : columns) {
-            if (column.contains(":"))  {
-                final String[] parts = column.split(":");
-                final byte[] cf = parts[0].getBytes(Charset.forName("UTF-8"));
-                final byte[] cq = parts[1].getBytes(Charset.forName("UTF-8"));
-                this.columns.add(new Column(cf, cq));
-            } else {
-                final byte[] cf = column.getBytes(Charset.forName("UTF-8"));
-                this.columns.add(new Column(cf, null));
-            }
-        }
+        super.parseColumns(context);
     }
 
     @OnPrimaryNodeStateChange
@@ -421,10 +322,6 @@ public class GetHBase extends AbstractProcessor {
         }
     }
 
-    // present for tests
-    protected int getBatchSize() {
-        return 500;
-    }
 
     protected File getStateDir() {
         return new File("conf/state");
