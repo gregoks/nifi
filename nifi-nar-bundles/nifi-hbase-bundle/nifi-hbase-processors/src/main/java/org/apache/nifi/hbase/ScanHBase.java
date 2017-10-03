@@ -25,9 +25,10 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-@TriggerWhenEmpty
-@TriggerSerially
-@InputRequirement(InputRequirement.Requirement.INPUT_FORBIDDEN)
+
+@EventDriven
+@SupportsBatching
+@InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @Tags({"hbase", "get", "ingest"})
 @CapabilityDescription("This Processor scans HBase for any records in the specified table based on the given filters. (Filter Language can be found at: https://issues.apache.org/jira/browse/HBASE-4176)" +
         "Each record is output in JSON format, as "
