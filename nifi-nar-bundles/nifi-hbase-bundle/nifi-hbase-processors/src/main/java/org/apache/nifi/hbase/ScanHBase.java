@@ -9,6 +9,7 @@ import org.apache.nifi.components.state.Scope;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.hbase.io.JsonRowSerializer;
 import org.apache.nifi.hbase.io.RowSerializer;
+import org.apache.nifi.hbase.scan.Column;
 import org.apache.nifi.hbase.scan.ResultCell;
 import org.apache.nifi.hbase.scan.ResultHandler;
 import org.apache.nifi.processor.ProcessContext;
@@ -87,7 +88,8 @@ public class ScanHBase extends AbstractScanHBase {
         final String initialTimeRange = context.getProperty(INITIAL_TIMERANGE).getValue();
         final String filterExpression = context.getProperty(FILTER_EXPRESSION_EXP).evaluateAttributeExpressions(flowFile.get()).getValue();
         final HBaseClientService hBaseClientService = context.getProperty(HBASE_CLIENT_SERVICE).asControllerService(HBaseClientService.class);
-
+        final List<Column> columns = new ArrayList<>();
+        parseColumns(context,flowFile.get(),columns);
         try {
             final Charset charset = Charset.forName(context.getProperty(CHARSET).getValue());
             final RowSerializer serializer = new JsonRowSerializer(charset);

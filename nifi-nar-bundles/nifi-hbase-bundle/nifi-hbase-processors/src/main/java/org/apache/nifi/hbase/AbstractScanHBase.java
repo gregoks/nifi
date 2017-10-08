@@ -12,6 +12,7 @@ import org.apache.nifi.components.ValidationResult;
 import org.apache.nifi.components.state.Scope;
 import org.apache.nifi.components.state.StateMap;
 import org.apache.nifi.distributed.cache.client.DistributedMapCacheClient;
+import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.hbase.scan.Column;
 import org.apache.nifi.processor.AbstractProcessor;
 import org.apache.nifi.processor.ProcessContext;
@@ -127,13 +128,8 @@ public abstract class AbstractScanHBase extends AbstractProcessor {
     }
 
 
-
-
-    @OnScheduled
-    public void parseColumns(final ProcessContext context) throws IOException {
-
-
-        final String columnsValue = context.getProperty(COLUMNS).getValue();
+    protected void  parseColumns(final ProcessContext context,final FlowFile flowFile,List<Column> columnList){
+        final String columnsValue = context.getProperty(COLUMNS_EXP).evaluateAttributeExpressions(flowFile).getValue();
         final String[] columns = (columnsValue == null || columnsValue.isEmpty() ? new String[0] : columnsValue.split(","));
 
         this.columns.clear();
@@ -142,12 +138,20 @@ public abstract class AbstractScanHBase extends AbstractProcessor {
                 final String[] parts = column.split(":");
                 final byte[] cf = parts[0].getBytes(Charset.forName("UTF-8"));
                 final byte[] cq = parts[1].getBytes(Charset.forName("UTF-8"));
-                this.columns.add(new Column(cf, cq));
+                columnList.add(new Column(cf, cq));
             } else {
                 final byte[] cf = column.getBytes(Charset.forName("UTF-8"));
-                this.columns.add(new Column(cf, null));
+                columnList.add(new Column(cf, null));
             }
         }
+    }
+ 
+
+    @OnScheduled
+    public void parseColumns(final ProcessContext context) throws IOException {
+
+        parseColumns(context,null,this.columns);
+
     }
 
 
