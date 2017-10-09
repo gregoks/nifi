@@ -17,6 +17,7 @@ import org.apache.nifi.processor.ProcessSession;
 import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.io.OutputStreamCallback;
+import org.apache.nifi.processor.util.StandardValidators;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -26,10 +27,12 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.nifi.processor.util.StandardValidators.LONG_VALIDATOR;
+
 
 @EventDriven
 @SupportsBatching
-@InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
+@InputRequirement(InputRequirement.Requirement.INPUT_ALLOWED)
 @Tags({"hbase", "get", "ingest"})
 @CapabilityDescription("This Processor scans HBase for any records in the specified table based on the given filters. (Filter Language can be found at: https://issues.apache.org/jira/browse/HBASE-4176)" +
         "Each record is output in JSON format, as "
@@ -40,6 +43,40 @@ import java.util.concurrent.atomic.AtomicReference;
         @WritesAttribute(attribute = "mime.type", description = "Set to application/json to indicate that output is JSON")
 })
 public class ScanHBase extends AbstractScanHBase {
+
+    static final PropertyDescriptor LAST_MODIFIED = new PropertyDescriptor.Builder()
+            .name("Last Modified")
+                .description("An epoch value, when specified only rows modified after this date are fetched")
+                .required(false)
+                .expressionLanguageSupported(true)
+                .addValidator(LONG_VALIDATOR)
+                .build();
+
+    static final PropertyDescriptor TABLE_NAME = new PropertyDescriptor.Builder()
+            .name("Table Name")
+            .description("The name of the HBase Table to put data into")
+            .required(true)
+            .expressionLanguageSupported(true)
+            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+            .build();
+
+    static final PropertyDescriptor COLUMNS = new PropertyDescriptor.Builder()
+            .name("Columns")
+            .description("A comma-separated list of \"<colFamily>:<colQualifier>\" pairs to return when scanning. To return all columns " +
+                    "for a given family, leave off the qualifier such as \"<colFamily1>,<colFamily2>\".")
+            .required(false)
+            .expressionLanguageSupported(true)
+            .addValidator(StandardValidators.createRegexMatchingValidator(COLUMNS_PATTERN))
+            .build();
+
+
+    static final PropertyDescriptor FILTER_EXPRESSION = new PropertyDescriptor.Builder()
+            .name("Filter Expression")
+            .description("An HBase filter expression that will be applied to the scan. This property can not be used when also using the Columns property.")
+            .required(false)
+            .expressionLanguageSupported(true)
+            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+            .build();
 
     static final Set<Relationship> relationships;
     static {
@@ -60,14 +97,31 @@ public class ScanHBase extends AbstractScanHBase {
     protected List<PropertyDescriptor> getSupportedPropertyDescriptors() {
         final List<PropertyDescriptor> properties = new ArrayList<>();
         properties.add(HBASE_CLIENT_SERVICE);
-        properties.add(TABLE_NAME_EXP);
-        properties.add(COLUMNS_EXP);
-        properties.add(FILTER_EXPRESSION_EXP);
-        properties.add(INITIAL_TIMERANGE);
+        properties.add(TABLE_NAME);
+        properties.add(COLUMNS);
+        properties.add(FILTER_EXPRESSION);
+        properties.add(LAST_MODIFIED);
         properties.add(CHARSET);
         return properties;
     }
 
+    protected void  parseColumns(final ProcessContext context,final FlowFile flowFile,List<Column> columnList){
+        final String columnsValue = context.getProperty(COLUMNS).evaluateAttributeExpressions(flowFile).getValue();
+        final String[] columns = (columnsValue == null || columnsValue.isEmpty() ? new String[0] : columnsValue.split(","));
+
+        columnList.clear();
+        for (final String column : columns) {
+            if (column.contains(":"))  {
+                final String[] parts = column.split(":");
+                final byte[] cf = parts[0].getBytes(Charset.forName("UTF-8"));
+                final byte[] cq = parts[1].getBytes(Charset.forName("UTF-8"));
+                columnList.add(new Column(cf, cq));
+            } else {
+                final byte[] cf = column.getBytes(Charset.forName("UTF-8"));
+                columnList.add(new Column(cf, null));
+            }
+        }
+    }
 
 
     @Override
@@ -77,7 +131,7 @@ public class ScanHBase extends AbstractScanHBase {
         if (flowFile.get() == null) {
             return;
         }
-        final String tableName = context.getProperty(TABLE_NAME_EXP).evaluateAttributeExpressions(flowFile.get()).getValue();
+        final String tableName = context.getProperty(TABLE_NAME).evaluateAttributeExpressions(flowFile.get()).getValue();
         if (StringUtils.isBlank(tableName)) {
             getLogger().error("Table Name is blank or null for {}, transferring to failure", new Object[] {flowFile});
             session.transfer(session.penalize(flowFile.get()), REL_FAILURE);
@@ -85,8 +139,8 @@ public class ScanHBase extends AbstractScanHBase {
         }
 
 
-        final String initialTimeRange = context.getProperty(INITIAL_TIMERANGE).getValue();
-        final String filterExpression = context.getProperty(FILTER_EXPRESSION_EXP).evaluateAttributeExpressions(flowFile.get()).getValue();
+        final Long initialTimeRange = context.getProperty(LAST_MODIFIED).evaluateAttributeExpressions(flowFile.get()).asLong();
+        final String filterExpression = context.getProperty(FILTER_EXPRESSION).evaluateAttributeExpressions(flowFile.get()).getValue();
         final HBaseClientService hBaseClientService = context.getProperty(HBASE_CLIENT_SERVICE).asControllerService(HBaseClientService.class);
         final List<Column> columns = new ArrayList<>();
         parseColumns(context,flowFile.get(),columns);
@@ -95,7 +149,7 @@ public class ScanHBase extends AbstractScanHBase {
             final RowSerializer serializer = new JsonRowSerializer(charset);
 
 
-            final long minTime = (initialTimeRange.equals(NONE.getValue()) ? 0L : System.currentTimeMillis());
+            final long minTime = (initialTimeRange==null) ? 0L : initialTimeRange.longValue();
 
 
             final Map<String, Set<String>> cellsMatchingTimestamp = new HashMap<>();

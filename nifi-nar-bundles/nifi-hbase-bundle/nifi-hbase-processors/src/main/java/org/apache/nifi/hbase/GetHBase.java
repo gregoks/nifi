@@ -75,6 +75,8 @@ import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.io.OutputStreamCallback;
 import org.apache.nifi.processor.util.StandardValidators;
 
+import static org.apache.nifi.processor.util.StandardValidators.LONG_VALIDATOR;
+
 @TriggerWhenEmpty
 @TriggerSerially
 @InputRequirement(InputRequirement.Requirement.INPUT_FORBIDDEN)
@@ -92,10 +94,71 @@ import org.apache.nifi.processor.util.StandardValidators;
     + "run on Primary Node only and the Primary Node changes.")
 public class GetHBase extends  AbstractScanHBase{
 
+    static final AllowableValue NONE = new AllowableValue("None", "None");
+    static final AllowableValue CURRENT_TIME = new AllowableValue("Current Time", "Current Time");
+
+    static final PropertyDescriptor DISTRIBUTED_CACHE_SERVICE = new PropertyDescriptor.Builder()
+            .name("Distributed Cache Service")
+            .description("Specifies the Controller Service that should be used to maintain state about what has been pulled from HBase" +
+                    " so that if a new node begins pulling data, it won't duplicate all of the work that has been done.")
+            .required(false)
+            .identifiesControllerService(DistributedMapCacheClient.class)
+            .build();
+
+    static final PropertyDescriptor INITIAL_TIMERANGE = new PropertyDescriptor.Builder()
+            .name("Initial Time Range")
+            .description("The time range to use on the first scan of a table. None will pull the entire table on the first scan, " +
+                    "Current Time will pull entries from that point forward.")
+            .required(true)
+            .expressionLanguageSupported(false)
+            .allowableValues(NONE, CURRENT_TIME)
+            .defaultValue(NONE.getValue())
+            .build();
+
+    static final PropertyDescriptor TIMERANGE_DELTA = new PropertyDescriptor.Builder()
+            .name("Timerange Delta")
+            .description("An epoch value, when specified adds this delta to the initial timerange to allow fetching rows with a given stale time")
+            .required(false)
+            .expressionLanguageSupported(false)
+            .addValidator(LONG_VALIDATOR)
+            .build();
+
+    static final PropertyDescriptor TABLE_NAME = new PropertyDescriptor.Builder()
+            .name("Table Name")
+            .description("The name of the HBase Table to put data into")
+            .required(true)
+            .expressionLanguageSupported(false)
+            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+            .build();
+
+
+    static final PropertyDescriptor COLUMNS = new PropertyDescriptor.Builder()
+            .name("Columns")
+            .description("A comma-separated list of \"<colFamily>:<colQualifier>\" pairs to return when scanning. To return all columns " +
+                    "for a given family, leave off the qualifier such as \"<colFamily1>,<colFamily2>\".")
+            .required(false)
+            .expressionLanguageSupported(false)
+            .addValidator(StandardValidators.createRegexMatchingValidator(COLUMNS_PATTERN))
+            .build();
+
+
+    static final PropertyDescriptor FILTER_EXPRESSION = new PropertyDescriptor.Builder()
+            .name("Filter Expression")
+            .description("An HBase filter expression that will be applied to the scan. This property can not be used when also using the Columns property.")
+            .required(false)
+            .expressionLanguageSupported(false)
+            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+            .build();
+
 
 
     private volatile ScanResult lastResult = null;
     protected volatile boolean justElectedPrimaryNode = false;
+
+
+    protected volatile List<Column> columns = new ArrayList<>();
+
+    protected volatile String previousTable = null;
 
     @Override
     protected List<PropertyDescriptor> getSupportedPropertyDescriptors() {
@@ -106,6 +169,7 @@ public class GetHBase extends  AbstractScanHBase{
         properties.add(COLUMNS);
         properties.add(FILTER_EXPRESSION);
         properties.add(INITIAL_TIMERANGE);
+        properties.add(TIMERANGE_DELTA);
         properties.add(CHARSET);
         return properties;
     }
@@ -149,7 +213,22 @@ public class GetHBase extends  AbstractScanHBase{
 
             clearState(client);
         }
-        super.parseColumns(context);
+
+        final String columnsValue = context.getProperty(COLUMNS).getValue();
+        final String[] columns = (columnsValue == null || columnsValue.isEmpty() ? new String[0] : columnsValue.split(","));
+
+        this.columns.clear();
+        for (final String column : columns) {
+            if (column.contains(":"))  {
+                final String[] parts = column.split(":");
+                final byte[] cf = parts[0].getBytes(Charset.forName("UTF-8"));
+                final byte[] cq = parts[1].getBytes(Charset.forName("UTF-8"));
+                this.columns.add(new Column(cf, cq));
+            } else {
+                final byte[] cf = column.getBytes(Charset.forName("UTF-8"));
+                this.columns.add(new Column(cf, null));
+            }
+        }
     }
 
     @OnPrimaryNodeStateChange
@@ -165,10 +244,24 @@ public class GetHBase extends  AbstractScanHBase{
         }
     }
 
+    protected long getInitialTime(ProcessContext context) throws IOException{
+        final String initialTimeRange = context.getProperty(INITIAL_TIMERANGE).getValue();
+        this.lastResult = getState(context.getStateManager());
+        final long defaultMinTime = (initialTimeRange.equals(NONE.getValue()) ? 0L : System.currentTimeMillis());
+        long minTime = (lastResult == null ? defaultMinTime : lastResult.getTimestamp());
+
+        final Long delta = context.getProperty(TIMERANGE_DELTA).asLong();
+        if(delta != null){
+            minTime += delta.longValue();
+        }
+
+        return minTime;
+    }
+
     @Override
     public void onTrigger(final ProcessContext context, final ProcessSession session) throws ProcessException {
         final String tableName = context.getProperty(TABLE_NAME).getValue();
-        final String initialTimeRange = context.getProperty(INITIAL_TIMERANGE).getValue();
+
         final String filterExpression = context.getProperty(FILTER_EXPRESSION).getValue();
         final HBaseClientService hBaseClientService = context.getProperty(HBASE_CLIENT_SERVICE).asControllerService(HBaseClientService.class);
 
@@ -186,9 +279,7 @@ public class GetHBase extends  AbstractScanHBase{
             final Charset charset = Charset.forName(context.getProperty(CHARSET).getValue());
             final RowSerializer serializer = new JsonRowSerializer(charset);
 
-            this.lastResult = getState(context.getStateManager());
-            final long defaultMinTime = (initialTimeRange.equals(NONE.getValue()) ? 0L : System.currentTimeMillis());
-            final long minTime = (lastResult == null ? defaultMinTime : lastResult.getTimestamp());
+            final long minTime = getInitialTime(context);
 
             final Map<String, Set<String>> cellsMatchingTimestamp = new HashMap<>();
 
