@@ -16,13 +16,12 @@
  */
 package org.apache.nifi.web.api;
 
-import com.sun.jersey.api.core.ResourceContext;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
-import com.wordnik.swagger.annotations.ApiParam;
-import com.wordnik.swagger.annotations.ApiResponse;
-import com.wordnik.swagger.annotations.ApiResponses;
-import com.wordnik.swagger.annotations.Authorization;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
+import io.swagger.annotations.Authorization;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.nifi.authorization.AuthorizeControllerServiceReference;
 import org.apache.nifi.authorization.Authorizer;
@@ -82,9 +81,6 @@ public class ControllerResource extends ApplicationResource {
     private ReportingTaskResource reportingTaskResource;
     private ControllerServiceResource controllerServiceResource;
 
-    @Context
-    private ResourceContext resourceContext;
-
     /**
      * Authorizes access to the flow.
      */
@@ -108,7 +104,7 @@ public class ControllerResource extends ApplicationResource {
             value = "Retrieves the configuration for this NiFi Controller",
             response = ControllerConfigurationEntity.class,
             authorizations = {
-                    @Authorization(value = "Read - /controller", type = "")
+                    @Authorization(value = "Read - /controller")
             }
     )
     @ApiResponses(
@@ -146,7 +142,7 @@ public class ControllerResource extends ApplicationResource {
             value = "Retrieves the configuration for this NiFi",
             response = ControllerConfigurationEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /controller", type = "")
+                    @Authorization(value = "Write - /controller")
             }
     )
     @ApiResponses(
@@ -211,9 +207,9 @@ public class ControllerResource extends ApplicationResource {
             value = "Creates a new reporting task",
             response = ReportingTaskEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /controller", type = ""),
-                    @Authorization(value = "Read - any referenced Controller Services - /controller-services/{uuid}", type = ""),
-                    @Authorization(value = "Write - if the Reporting Task is restricted - /restricted-components", type = "")
+                    @Authorization(value = "Write - /controller"),
+                    @Authorization(value = "Read - any referenced Controller Services - /controller-services/{uuid}"),
+                    @Authorization(value = "Write - if the Reporting Task is restricted - /restricted-components")
             }
     )
     @ApiResponses(
@@ -309,7 +305,7 @@ public class ControllerResource extends ApplicationResource {
             value = "Creates a new bulletin",
             response = BulletinEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /controller", type = "")
+                    @Authorization(value = "Write - /controller")
             }
     )
     @ApiResponses(
@@ -378,9 +374,9 @@ public class ControllerResource extends ApplicationResource {
             value = "Creates a new controller service",
             response = ControllerServiceEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /controller", type = ""),
-                    @Authorization(value = "Read - any referenced Controller Services - /controller-services/{uuid}", type = ""),
-                    @Authorization(value = "Write - if the Controller Service is restricted - /restricted-components", type = "")
+                    @Authorization(value = "Write - /controller"),
+                    @Authorization(value = "Read - any referenced Controller Services - /controller-services/{uuid}"),
+                    @Authorization(value = "Write - if the Controller Service is restricted - /restricted-components")
             }
     )
     @ApiResponses(
@@ -483,7 +479,7 @@ public class ControllerResource extends ApplicationResource {
             notes = "Returns the contents of the cluster including all nodes and their status.",
             response = ClusterEntity.class,
             authorizations = {
-                    @Authorization(value = "Read - /controller", type = "")
+                    @Authorization(value = "Read - /controller")
             }
     )
     @ApiResponses(
@@ -531,7 +527,7 @@ public class ControllerResource extends ApplicationResource {
             value = "Gets a node in the cluster",
             response = NodeEntity.class,
             authorizations = {
-                    @Authorization(value = "Read - /controller", type = "")
+                    @Authorization(value = "Read - /controller")
             }
     )
     @ApiResponses(
@@ -587,7 +583,7 @@ public class ControllerResource extends ApplicationResource {
             value = "Updates a node in the cluster",
             response = NodeEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /controller", type = "")
+                    @Authorization(value = "Write - /controller")
             }
     )
     @ApiResponses(
@@ -657,7 +653,7 @@ public class ControllerResource extends ApplicationResource {
             value = "Removes a node from the cluster",
             response = NodeEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /controller", type = "")
+                    @Authorization(value = "Write - /controller")
             }
     )
     @ApiResponses(
@@ -714,7 +710,7 @@ public class ControllerResource extends ApplicationResource {
             value = "Purges history",
             response = HistoryEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /controller", type = "")
+                    @Authorization(value = "Write - /controller")
             }
     )
     @ApiResponses(

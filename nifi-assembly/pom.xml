@@ -14,7 +14,7 @@
     <parent>
         <groupId>org.apache.nifi</groupId>
         <artifactId>nifi</artifactId>
-        <version>1.4.0-SNAPSHOT</version>
+        <version>1.5.0-SNAPSHOT</version>
     </parent>
     <artifactId>nifi-assembly</artifactId>
     <packaging>pom</packaging>
@@ -514,6 +514,16 @@
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-redis-nar</artifactId>
+            <type>nar</type>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.nifi</groupId>
+            <artifactId>nifi-metrics-reporter-service-api-nar</artifactId>
+            <type>nar</type>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.nifi</groupId>
+            <artifactId>nifi-metrics-reporting-nar</artifactId>
             <type>nar</type>
         </dependency>
     </dependencies>

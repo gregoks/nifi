@@ -16,15 +16,12 @@
  */
 package org.apache.nifi.web.api;
 
-import com.sun.jersey.api.core.ResourceContext;
-import com.sun.jersey.core.util.MultivaluedMapImpl;
-import com.sun.jersey.multipart.FormDataParam;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
-import com.wordnik.swagger.annotations.ApiParam;
-import com.wordnik.swagger.annotations.ApiResponse;
-import com.wordnik.swagger.annotations.ApiResponses;
-import com.wordnik.swagger.annotations.Authorization;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
+import io.swagger.annotations.Authorization;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.nifi.authorization.AuthorizableLookup;
 import org.apache.nifi.authorization.AuthorizeAccess;
@@ -100,6 +97,7 @@ import org.apache.nifi.web.api.request.ClientIdParameter;
 import org.apache.nifi.web.api.request.LongParameter;
 import org.apache.nifi.web.security.token.NiFiAuthenticationToken;
 import org.apache.nifi.web.util.Pause;
+import org.glassfish.jersey.media.multipart.FormDataParam;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
@@ -119,6 +117,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.MultivaluedHashMap;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
@@ -165,9 +164,6 @@ import java.util.stream.Collectors;
 public class ProcessGroupResource extends ApplicationResource {
 
     private static final Logger logger = LoggerFactory.getLogger(ProcessGroupResource.class);
-
-    @Context
-    private ResourceContext resourceContext;
 
     private NiFiServiceFacade serviceFacade;
     private Authorizer authorizer;
@@ -257,7 +253,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Gets a process group",
             response = ProcessGroupEntity.class,
             authorizations = {
-                    @Authorization(value = "Read - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Read - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -312,7 +308,7 @@ public class ProcessGroupResource extends ApplicationResource {
         response = VariableRegistryEntity.class,
         notes = NON_GUARANTEED_ENDPOINT,
         authorizations = {
-            @Authorization(value = "Read - /process-groups/{uuid}", type = "")
+            @Authorization(value = "Read - /process-groups/{uuid}")
         })
     @ApiResponses(value = {
         @ApiResponse(code = 400, message = "NiFi was unable to complete the request because it was invalid. The request should not be retried without modification."),
@@ -356,7 +352,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Updates a process group",
             response = ProcessGroupEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Write - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -436,7 +432,7 @@ public class ProcessGroupResource extends ApplicationResource {
         response = VariableRegistryUpdateRequestEntity.class,
         notes = NON_GUARANTEED_ENDPOINT,
         authorizations = {
-            @Authorization(value = "Read - /process-groups/{uuid}", type = "")
+            @Authorization(value = "Read - /process-groups/{uuid}")
         })
     @ApiResponses(value = {
         @ApiResponse(code = 400, message = "NiFi was unable to complete the request because it was invalid. The request should not be retried without modification."),
@@ -490,7 +486,7 @@ public class ProcessGroupResource extends ApplicationResource {
         response = VariableRegistryUpdateRequestEntity.class,
         notes = NON_GUARANTEED_ENDPOINT,
         authorizations = {
-            @Authorization(value = "Read - /process-groups/{uuid}", type = "")
+            @Authorization(value = "Read - /process-groups/{uuid}")
         })
     @ApiResponses(value = {
         @ApiResponse(code = 400, message = "NiFi was unable to complete the request because it was invalid. The request should not be retried without modification."),
@@ -544,7 +540,7 @@ public class ProcessGroupResource extends ApplicationResource {
     @Produces(MediaType.APPLICATION_JSON)
     @Path("{id}/variable-registry")
     @ApiOperation(value = "Updates the contents of a Process Group's variable Registry", response = VariableRegistryEntity.class, notes = NON_GUARANTEED_ENDPOINT, authorizations = {
-        @Authorization(value = "Write - /process-groups/{uuid}", type = "")
+        @Authorization(value = "Write - /process-groups/{uuid}")
     })
     @ApiResponses(value = {
         @ApiResponse(code = 400, message = "NiFi was unable to complete the request because it was invalid. The request should not be retried without modification."),
@@ -612,7 +608,7 @@ public class ProcessGroupResource extends ApplicationResource {
         response = VariableRegistryUpdateRequestEntity.class,
         notes = NON_GUARANTEED_ENDPOINT,
         authorizations = {
-            @Authorization(value = "Write - /process-groups/{uuid}", type = "")
+            @Authorization(value = "Write - /process-groups/{uuid}")
         })
     @ApiResponses(value = {
         @ApiResponse(code = 400, message = "NiFi was unable to complete the request because it was invalid. The request should not be retried without modification."),
@@ -826,7 +822,7 @@ public class ProcessGroupResource extends ApplicationResource {
         }
 
         final Map<String, String> headers = new HashMap<>();
-        final MultivaluedMap<String, String> requestEntity = new MultivaluedMapImpl();
+        final MultivaluedMap<String, String> requestEntity = new MultivaluedHashMap();
 
         boolean continuePolling = true;
         while (continuePolling) {
@@ -983,7 +979,7 @@ public class ProcessGroupResource extends ApplicationResource {
         }
 
         final Map<String, String> headers = new HashMap<>();
-        final MultivaluedMap<String, String> requestEntity = new MultivaluedMapImpl();
+        final MultivaluedMap<String, String> requestEntity = new MultivaluedHashMap();
 
         boolean continuePolling = true;
         while (continuePolling) {
@@ -1416,7 +1412,7 @@ public class ProcessGroupResource extends ApplicationResource {
     private <T> T getResponseEntity(final NodeResponse nodeResponse, final Class<T> clazz) {
         T entity = (T) nodeResponse.getUpdatedEntity();
         if (entity == null) {
-            entity = nodeResponse.getClientResponse().getEntity(clazz);
+            entity = nodeResponse.getClientResponse().readEntity(clazz);
         }
         return entity;
     }
@@ -1438,10 +1434,10 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Deletes a process group",
             response = ProcessGroupEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /process-groups/{uuid}", type = ""),
-                    @Authorization(value = "Write - Parent Process Group - /process-groups/{uuid}", type = ""),
-                    @Authorization(value = "Read - any referenced Controller Services by any encapsulated components - /controller-services/{uuid}", type = ""),
-                    @Authorization(value = "Write - /{component-type}/{uuid} - For all encapsulated components", type = "")
+                    @Authorization(value = "Write - /process-groups/{uuid}"),
+                    @Authorization(value = "Write - Parent Process Group - /process-groups/{uuid}"),
+                    @Authorization(value = "Read - any referenced Controller Services by any encapsulated components - /controller-services/{uuid}"),
+                    @Authorization(value = "Write - /{component-type}/{uuid} - For all encapsulated components")
             }
     )
     @ApiResponses(
@@ -1526,7 +1522,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Creates a process group",
             response = ProcessGroupEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Write - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -1616,7 +1612,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Gets all process groups",
             response = ProcessGroupsEntity.class,
             authorizations = {
-                    @Authorization(value = "Read - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Read - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -1683,9 +1679,9 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Creates a new processor",
             response = ProcessorEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /process-groups/{uuid}", type = ""),
-                    @Authorization(value = "Read - any referenced Controller Services - /controller-services/{uuid}", type = ""),
-                    @Authorization(value = "Write - if the Processor is restricted - /restricted-components", type = "")
+                    @Authorization(value = "Write - /process-groups/{uuid}"),
+                    @Authorization(value = "Read - any referenced Controller Services - /controller-services/{uuid}"),
+                    @Authorization(value = "Write - if the Processor is restricted - /restricted-components")
             }
     )
     @ApiResponses(
@@ -1803,7 +1799,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Gets all processors",
             response = ProcessorsEntity.class,
             authorizations = {
-                    @Authorization(value = "Read - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Read - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -1864,7 +1860,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Creates an input port",
             response = PortEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Write - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -1953,7 +1949,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Gets all input ports",
             response = InputPortsEntity.class,
             authorizations = {
-                    @Authorization(value = "Read - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Read - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -2012,7 +2008,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Creates an output port",
             response = PortEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Write - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -2101,7 +2097,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Gets all output ports",
             response = OutputPortsEntity.class,
             authorizations = {
-                    @Authorization(value = "Read - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Read - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -2161,7 +2157,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Creates a funnel",
             response = FunnelEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Write - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -2250,7 +2246,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Gets all funnels",
             response = FunnelsEntity.class,
             authorizations = {
-                    @Authorization(value = "Read - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Read - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -2310,7 +2306,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Creates a label",
             response = LabelEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Write - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -2399,7 +2395,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Gets all labels",
             response = LabelsEntity.class,
             authorizations = {
-                    @Authorization(value = "Read - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Read - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -2459,7 +2455,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Creates a new process group",
             response = RemoteProcessGroupEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Write - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -2563,7 +2559,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Gets all remote process groups",
             response = RemoteProcessGroupsEntity.class,
             authorizations = {
-                    @Authorization(value = "Read - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Read - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -2630,9 +2626,9 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Creates a connection",
             response = ConnectionEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /process-groups/{uuid}", type = ""),
-                    @Authorization(value = "Write Source - /{component-type}/{uuid}", type = ""),
-                    @Authorization(value = "Write Destination - /{component-type}/{uuid}", type = "")
+                    @Authorization(value = "Write - /process-groups/{uuid}"),
+                    @Authorization(value = "Write Source - /{component-type}/{uuid}"),
+                    @Authorization(value = "Write Destination - /{component-type}/{uuid}")
             }
     )
     @ApiResponses(
@@ -2791,7 +2787,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Gets all connections",
             response = ConnectionsEntity.class,
             authorizations = {
-                    @Authorization(value = "Read - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Read - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -2854,9 +2850,9 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Copies a snippet and discards it.",
             response = FlowEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /process-groups/{uuid}", type = ""),
-                    @Authorization(value = "Read - /{component-type}/{uuid} - For each component in the snippet and their descendant components", type = ""),
-                    @Authorization(value = "Write - if the snippet contains any restricted Processors - /restricted-components", type = "")
+                    @Authorization(value = "Write - /process-groups/{uuid}"),
+                    @Authorization(value = "Read - /{component-type}/{uuid} - For each component in the snippet and their descendant components"),
+                    @Authorization(value = "Write - if the snippet contains any restricted Processors - /restricted-components")
             }
     )
     @ApiResponses(
@@ -2989,9 +2985,9 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Instantiates a template",
             response = FlowEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /process-groups/{uuid}", type = ""),
-                    @Authorization(value = "Read - /templates/{uuid}", type = ""),
-                    @Authorization(value = "Write - if the template contains any restricted components - /restricted-components", type = "")
+                    @Authorization(value = "Write - /process-groups/{uuid}"),
+                    @Authorization(value = "Read - /templates/{uuid}"),
+                    @Authorization(value = "Write - if the template contains any restricted components - /restricted-components")
             }
     )
     @ApiResponses(
@@ -3141,8 +3137,8 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Creates a template and discards the specified snippet.",
             response = TemplateEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /process-groups/{uuid}", type = ""),
-                    @Authorization(value = "Read - /{component-type}/{uuid} - For each component in the snippet and their descendant components", type = "")
+                    @Authorization(value = "Write - /process-groups/{uuid}"),
+                    @Authorization(value = "Read - /{component-type}/{uuid} - For each component in the snippet and their descendant components")
             }
     )
     @ApiResponses(
@@ -3213,7 +3209,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Uploads a template",
             response = TemplateEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Write - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -3299,7 +3295,7 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Imports a template",
             response = TemplateEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /process-groups/{uuid}", type = "")
+                    @Authorization(value = "Write - /process-groups/{uuid}")
             }
     )
     @ApiResponses(
@@ -3381,9 +3377,9 @@ public class ProcessGroupResource extends ApplicationResource {
             value = "Creates a new controller service",
             response = ControllerServiceEntity.class,
             authorizations = {
-                    @Authorization(value = "Write - /process-groups/{uuid}", type = ""),
-                    @Authorization(value = "Read - any referenced Controller Services - /controller-services/{uuid}", type = ""),
-                    @Authorization(value = "Write - if the Controller Service is restricted - /restricted-components", type = "")
+                    @Authorization(value = "Write - /process-groups/{uuid}"),
+                    @Authorization(value = "Read - any referenced Controller Services - /controller-services/{uuid}"),
+                    @Authorization(value = "Write - if the Controller Service is restricted - /restricted-components")
             }
     )
     @ApiResponses(
