@@ -19,6 +19,7 @@ package org.apache.nifi.hbase;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.nifi.controller.AbstractControllerService;
 import org.apache.nifi.hbase.increment.IncrementColumn;
+import org.apache.nifi.hbase.increment.IncrementColumnResult;
 import org.apache.nifi.hbase.increment.IncrementFlowFile;
 import org.apache.nifi.hbase.put.PutColumn;
 import org.apache.nifi.hbase.put.PutFlowFile;
@@ -60,7 +61,7 @@ public class MockHBaseClientService extends AbstractControllerService implements
     }
 
     @Override
-    public void increment(String tableName, Collection<IncrementFlowFile> increments) throws IOException {
+    public Collection<IncrementColumnResult> increment(String tableName, Collection<IncrementFlowFile> increments) throws IOException {
         if (throwException) {
             throw new IOException("exception");
         }
@@ -76,7 +77,7 @@ public class MockHBaseClientService extends AbstractControllerService implements
     }
 
     @Override
-    public void increment(String tableName, byte[] rowId, Collection<IncrementColumn> columns) throws IOException {
+    public Collection<IncrementColumnResult> increment(String tableName, byte[] rowId, Collection<IncrementColumn> columns) throws IOException {
         throw new UnsupportedOperationException();
     }
 

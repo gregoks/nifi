@@ -43,6 +43,7 @@ import org.apache.nifi.hadoop.KerberosProperties;
 import org.apache.nifi.hadoop.KerberosTicketRenewer;
 import org.apache.nifi.hadoop.SecurityUtil;
 import org.apache.nifi.hbase.increment.IncrementColumn;
+import org.apache.nifi.hbase.increment.IncrementColumnResult;
 import org.apache.nifi.hbase.increment.IncrementFlowFile;
 import org.apache.nifi.hbase.put.PutColumn;
 import org.apache.nifi.hbase.put.PutFlowFile;
@@ -272,9 +273,16 @@ public class HBase_1_1_2_ClientService extends AbstractControllerService impleme
         }
     }
 
-
+    private static long getLongValue(byte[] bytes){
+        long value = 0;
+        for (int i = 0; i < bytes.length; i++)
+        {
+            value += ((long) bytes[i] & 0xffL) << (8 * i);
+        }
+        return value;
+    }
     @Override
-    public void increment(String tableName, byte[] rowId, Collection<IncrementColumn> columns) throws IOException {
+    public Collection<IncrementColumnResult> increment(String tableName, byte[] rowId, Collection<IncrementColumn> columns) throws IOException {
         try (final Table table = connection.getTable(TableName.valueOf(tableName))) {
             Increment inc = new Increment(rowId);
             for (final IncrementColumn column : columns) {
@@ -283,14 +291,22 @@ public class HBase_1_1_2_ClientService extends AbstractControllerService impleme
                         column.getDelta());
             }
 
-            table.increment(inc);
+            Result res =table.increment(inc);
+            //collect changes
+            List<IncrementColumnResult> results = new ArrayList<>();
+            for (final IncrementColumn column : columns) {
+                byte[] val = res.getValue(column.getColumnFamily(),column.getColumnQualifier());
+                results.add(new IncrementColumnResult(column.getColumnFamily(),column.getColumnQualifier(),getLongValue(val)));
+            }
+            return results;
         }
     }
 
     @Override
-    public void increment(final String tableName, final Collection<IncrementFlowFile> increments) throws IOException {
+    public Collection<IncrementColumnResult> increment(final String tableName, final Collection<IncrementFlowFile> increments) throws IOException {
         try (final Table table = connection.getTable(TableName.valueOf(tableName))) {
             // Create one Put per row....
+            List<IncrementColumnResult> results = new ArrayList<>();
             final Map<String, Increment> rowIncs = new HashMap<>();
             for (final IncrementFlowFile incrementFlowFile : increments) {
                 //this is used for the map key as a byte[] does not work as a key.
@@ -310,8 +326,16 @@ public class HBase_1_1_2_ClientService extends AbstractControllerService impleme
 
                 }
 
-                table.increment(inc);
+
+                Result res =table.increment(inc);
+                //accumelate results
+                for (final IncrementColumn column : incrementFlowFile.getColumns()) {
+                    byte[] val = res.getValue(column.getColumnFamily(),column.getColumnQualifier());
+                    results.add(new IncrementColumnResult(column.getColumnFamily(),column.getColumnQualifier(),getLongValue(val)));
+                }
+
             }
+            return results;
         }
     }
 

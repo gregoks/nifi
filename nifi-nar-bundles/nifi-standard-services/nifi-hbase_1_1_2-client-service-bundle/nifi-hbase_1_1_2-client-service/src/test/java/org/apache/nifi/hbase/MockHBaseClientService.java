@@ -23,6 +23,7 @@ import org.apache.hadoop.hbase.filter.Filter;
 import org.apache.nifi.controller.ConfigurationContext;
 import org.apache.nifi.hadoop.KerberosProperties;
 import org.apache.nifi.hbase.increment.IncrementColumn;
+import org.apache.nifi.hbase.increment.IncrementColumnResult;
 import org.apache.nifi.hbase.increment.IncrementFlowFile;
 import org.apache.nifi.hbase.put.PutColumn;
 import org.apache.nifi.hbase.scan.Column;
@@ -104,8 +105,17 @@ public class MockHBaseClientService extends HBase_1_1_2_ClientService {
         results.add(result);
     }
 
+    private static long getLongValue(byte[] bytes){
+        long value = 0;
+        for (int i = 0; i < bytes.length; i++)
+        {
+            value += ((long) bytes[i] & 0xffL) << (8 * i);
+        }
+        return value;
+    }
+
     @Override
-    public void increment(String tableName, byte[] rowId, Collection<IncrementColumn> columns) throws IOException {
+    public Collection<IncrementColumnResult> increment(String tableName, byte[] rowId, Collection<IncrementColumn> columns) throws IOException {
         //try (final Table table = connection.getTable(TableName.valueOf(tableName))) {
             Increment inc = new Increment(rowId);
             for (final IncrementColumn column : columns) {
@@ -114,14 +124,23 @@ public class MockHBaseClientService extends HBase_1_1_2_ClientService {
                         column.getDelta());
             }
 
-            table.increment(inc);
+           Result res = table.increment(inc);
+            //collect changes
+            List<IncrementColumnResult> results = new ArrayList<>();
+            for (final IncrementColumn column : columns) {
+                byte[] val = res.getValue(column.getColumnFamily(),column.getColumnQualifier());
+                results.add(new IncrementColumnResult(column.getColumnFamily(),column.getColumnQualifier(),getLongValue(val)));
+            }
+            return results;
         //}
     }
 
     @Override
-    public void increment(String tableName, Collection<IncrementFlowFile> increments) throws IOException {
+    public Collection<IncrementColumnResult> increment(String tableName, Collection<IncrementFlowFile> increments) throws IOException {
         // Create one Put per row....
         final Map<String, Increment> rowIncs = new HashMap<>();
+        List<IncrementColumnResult> results = new ArrayList<>();
+
         for (final IncrementFlowFile incrementFlowFile : increments) {
             //this is used for the map key as a byte[] does not work as a key.
             final String rowKeyString = new String(incrementFlowFile.getRow(), StandardCharsets.UTF_8);
@@ -139,8 +158,15 @@ public class MockHBaseClientService extends HBase_1_1_2_ClientService {
                         column.getDelta().longValue());
 
             }
-            table.increment(inc);
+            Result res =table.increment(inc);
+            //accumelate results
+            for (final IncrementColumn column : incrementFlowFile.getColumns()) {
+                byte[] val = res.getValue(column.getColumnFamily(),column.getColumnQualifier());
+                results.add(new IncrementColumnResult(column.getColumnFamily(),column.getColumnQualifier(),getLongValue(val)));
+            }
         }
+        return results;
+
     }
 
     @Override
