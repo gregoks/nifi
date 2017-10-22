@@ -235,10 +235,10 @@ public abstract class AbstractKudu extends AbstractProcessor {
             session.getProvenanceReporter().send(flowFile, "Successfully added flowfile to kudu");
 
         } catch (IOException | FlowFileAccessException e) {
-            getLogger().error("Failed to write due to {}", new Object[]{e});
+            getLogger().error("Failed to write due to {}", new Object[]{e},e);
             session.transfer(flowFile, REL_FAILURE);
         } catch (Throwable t) {
-            getLogger().error("Failed to write due to {}", new Object[]{t});
+            getLogger().error("Failed to write due to {}", new Object[]{t},t);
             session.transfer(flowFile, REL_FAILURE);
         }
     }
