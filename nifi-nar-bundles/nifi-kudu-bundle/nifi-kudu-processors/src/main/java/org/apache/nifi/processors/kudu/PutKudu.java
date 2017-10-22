@@ -94,7 +94,10 @@ public class PutKudu extends AbstractKudu {
             int colIdx = this.getColumnIndex(colSchema, colName);
             if (colIdx != -1) {
                 Type colType = colSchema.getColumnByIndex(colIdx).getType();
-
+                if(record.getValue(colName) == null){
+                    getLogger().warn("Could not get string value for Column {}",new Object[]{colName});
+                    continue;
+                }
                 switch (colType.getDataType()) {
                     case BOOL:
                         row.addBoolean(colIdx, record.getAsBoolean(colName));
@@ -116,15 +119,13 @@ public class PutKudu extends AbstractKudu {
                         row.addInt(colIdx, record.getAsInt(colName));
                         break;
                     case INT64:
-                        row.addLong(colIdx, record.getAsLong(colName));
+
+                         row.addLong(colIdx, record.getAsLong(colName));
+
                         break;
                     case STRING:
-                        String val = record.getAsString(colName);
-                        if(val !=  null)
-                             row.addString(colIdx, val);
-                        else{
-                            getLogger().warn("Could not get string value for Column {}",new Object[]{colName});
-                        }
+                             row.addString(colIdx, record.getAsString(colName));
+
                         break;
                     default:
                         throw new IllegalStateException(String.format("unknown column type %s", colType));
