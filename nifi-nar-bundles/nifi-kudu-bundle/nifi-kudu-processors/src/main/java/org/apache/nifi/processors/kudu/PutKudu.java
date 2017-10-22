@@ -119,7 +119,12 @@ public class PutKudu extends AbstractKudu {
                         row.addLong(colIdx, record.getAsLong(colName));
                         break;
                     case STRING:
-                        row.addString(colIdx, record.getAsString(colName));
+                        String val = record.getAsString(colName);
+                        if(val !=  null)
+                             row.addString(colIdx, val);
+                        else{
+                            getLogger().warn("Could not get string value for Column {}",new Object[]{colName});
+                        }
                         break;
                     default:
                         throw new IllegalStateException(String.format("unknown column type %s", colType));
