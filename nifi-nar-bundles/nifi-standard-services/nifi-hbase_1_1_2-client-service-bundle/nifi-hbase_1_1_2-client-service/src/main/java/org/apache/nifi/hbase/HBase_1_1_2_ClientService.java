@@ -306,7 +306,7 @@ public class HBase_1_1_2_ClientService extends AbstractControllerService impleme
     public Collection<IncrementColumnResult> increment(final String tableName, final Collection<IncrementFlowFile> increments) throws IOException {
         try (final Table table = connection.getTable(TableName.valueOf(tableName))) {
             // Create one Put per row....
-            List<IncrementColumnResult> results = new ArrayList<>();
+            List<IncrementColumnResult> AllResults = new ArrayList<>();
             final Map<String, Increment> rowIncs = new HashMap<>();
             for (final IncrementFlowFile incrementFlowFile : increments) {
                 //this is used for the map key as a byte[] does not work as a key.
@@ -327,15 +327,18 @@ public class HBase_1_1_2_ClientService extends AbstractControllerService impleme
                 }
 
 
+                List<IncrementColumnResult> results = new ArrayList<>();
                 Result res =table.increment(inc);
                 //accumelate results
                 for (final IncrementColumn column : incrementFlowFile.getColumns()) {
                     byte[] val = res.getValue(column.getColumnFamily(),column.getColumnQualifier());
                     results.add(new IncrementColumnResult(column.getColumnFamily(),column.getColumnQualifier(),getLongValue(val)));
                 }
+                incrementFlowFile.setColumnResults(results);
+                AllResults.addAll(results);
 
             }
-            return results;
+            return AllResults;
         }
     }
 

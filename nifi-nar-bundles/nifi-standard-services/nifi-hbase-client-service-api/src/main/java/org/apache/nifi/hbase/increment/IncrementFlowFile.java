@@ -3,12 +3,14 @@ package org.apache.nifi.hbase.increment;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.hbase.put.PutColumn;
 
+import java.util.ArrayList;
 import java.util.Collection;
 
 public class IncrementFlowFile {
     private final String tableName;
     private final byte[] row;
     private final Collection<IncrementColumn> columns;
+    private final Collection<IncrementColumnResult> columnResults=new ArrayList<>();
     private final FlowFile flowFile;
 
     public IncrementFlowFile(String tableName, byte[] row, Collection<IncrementColumn> columns, FlowFile flowFile) {
@@ -16,6 +18,12 @@ public class IncrementFlowFile {
         this.row = row;
         this.columns = columns;
         this.flowFile = flowFile;
+    }
+
+    public IncrementFlowFile setColumnResults(Collection<IncrementColumnResult> results){
+        columnResults.clear();
+        columnResults.addAll(results);
+        return this;
     }
 
      public String getTableName() {
