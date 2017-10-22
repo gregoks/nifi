@@ -95,7 +95,7 @@ public class PutKudu extends AbstractKudu {
             if (colIdx != -1) {
                 Type colType = colSchema.getColumnByIndex(colIdx).getType();
                 if(record.getValue(colName) == null){
-                    getLogger().warn("Could not get string value for Column {}",new Object[]{colName});
+                    getLogger().warn("Could not get value for Column {}",new Object[]{colName});
                     continue;
                 }
                 switch (colType.getDataType()) {
