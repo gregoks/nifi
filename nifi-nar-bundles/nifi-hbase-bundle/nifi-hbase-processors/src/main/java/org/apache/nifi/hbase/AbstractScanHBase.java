@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 
 public abstract class AbstractScanHBase extends AbstractProcessor {
 
-    static final Pattern COLUMNS_PATTERN = Pattern.compile("\\w+(:\\w+)?(?:,\\w+(:\\w+)?)*");
+    static final Pattern COLUMNS_PATTERN = Pattern.compile("\\w+(:[\\w$]+)?(?:,\\w+(:[\\w$]+)?)*");
 
 
     static final PropertyDescriptor HBASE_CLIENT_SERVICE = new PropertyDescriptor.Builder()

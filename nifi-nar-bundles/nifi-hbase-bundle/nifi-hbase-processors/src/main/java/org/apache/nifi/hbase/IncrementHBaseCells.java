@@ -24,6 +24,7 @@ import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.hbase.increment.IncrementColumn;
+import org.apache.nifi.hbase.increment.IncrementColumnResult;
 import org.apache.nifi.hbase.increment.IncrementFlowFile;
 import org.apache.nifi.hbase.put.PutColumn;
 import org.apache.nifi.hbase.put.PutFlowFile;
@@ -148,13 +149,19 @@ public class IncrementHBaseCells extends AbstractWriteHBase {
 
         for (IncrementFlowFile incrementFlowFile : successes) {
             StringBuilder sb = new StringBuilder("{");
-            for(IncrementColumn col : incrementFlowFile.getColumns()){
-                if(sb.length() > 1)
-                    sb.append(",");
-                sb.append(col.toString());
+            for(IncrementColumnResult col : incrementFlowFile.getColumnResults()){
+
+                if(col.getValue() != null) {
+                     //if we have a value, add it as an attribute
+                    session.putAttribute(incrementFlowFile.getFlowFile(),
+                            "hbase.increment." + new String(col.getColumnFamily(), StandardCharsets.UTF_8)
+                                    + "." + new String(col.getColumnQualifier(), StandardCharsets.UTF_8),
+                            col.getValue().toString());
+                }
+
             }
-            sb.append("}");
-            session.putAttribute(incrementFlowFile.getFlowFile(),"incremented",sb.toString());
+
+
             session.transfer(incrementFlowFile.getFlowFile(), REL_SUCCESS);
             final String details = "Put " + incrementFlowFile.getColumns().size() + " cells to HBase";
             session.getProvenanceReporter().send(incrementFlowFile.getFlowFile(), getTransitUri(incrementFlowFile), details, sendMillis);

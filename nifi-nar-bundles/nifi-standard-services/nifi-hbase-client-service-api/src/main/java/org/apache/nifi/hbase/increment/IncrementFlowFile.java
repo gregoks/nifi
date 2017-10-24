@@ -26,7 +26,11 @@ public class IncrementFlowFile {
         return this;
     }
 
-     public String getTableName() {
+    public Collection<IncrementColumnResult> getColumnResults() {
+        return columnResults;
+    }
+
+    public String getTableName() {
         return tableName;
     }
 
