@@ -55,6 +55,7 @@ import org.apache.nifi.reporting.InitializationException;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
@@ -273,14 +274,13 @@ public class HBase_1_1_2_ClientService extends AbstractControllerService impleme
         }
     }
 
-    private static long getLongValue(byte[] bytes){
-        long value = 0;
-        for (int i = 0; i < bytes.length; i++)
-        {
-            value += ((long) bytes[i] & 0xffL) << (8 * i);
-        }
-        return value;
+    private static long getLongValue(byte[] bytes) {
+        ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
+        buffer.put(bytes);
+        buffer.flip();//need flip
+        return buffer.getLong();
     }
+
     @Override
     public Collection<IncrementColumnResult> increment(String tableName, byte[] rowId, Collection<IncrementColumn> columns) throws IOException {
         try (final Table table = connection.getTable(TableName.valueOf(tableName))) {
