@@ -95,7 +95,8 @@ public class PutKudu extends AbstractKudu {
             if (colIdx != -1) {
                 Type colType = colSchema.getColumnByIndex(colIdx).getType();
                 if(record.getValue(colName) == null){
-                    row.setNull(colName);
+                    if(operation instanceof Upsert)
+                        row.setNull(colIdx);
                     //getLogger().info("Could not get value for Column {}",new Object[]{colName});
                     continue;
                 }
