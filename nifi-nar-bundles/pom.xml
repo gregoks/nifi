@@ -89,6 +89,7 @@
         <module>nifi-grpc-bundle</module>
         <module>nifi-redis-bundle</module>
         <module>nifi-metrics-reporting-bundle</module>
+        <module>nifi-payoneer-bundle</module>
   </modules>
 
     <build>
@@ -111,7 +112,7 @@
                     <doUpdate>false</doUpdate>
                     <shortRevisionLength>7</shortRevisionLength>
                     <getRevisionOnlyOnce>true</getRevisionOnlyOnce>
-                    <revisionOnScmFailure />
+                    <revisionOnScmFailure/>
                     <buildNumberPropertyName>buildRevision</buildNumberPropertyName>
                     <scmBranchPropertyName>buildBranch</scmBranchPropertyName>
                 </configuration>
@@ -130,8 +131,8 @@
                 </file>
             </activation>
             <properties>
-                <buildRevision />
-                <buildBranch />
+                <buildRevision/>
+                <buildBranch/>
             </properties>
         </profile>
     </profiles>

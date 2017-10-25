@@ -174,13 +174,13 @@ public abstract class AbstractKudu extends AbstractProcessor {
     @Override
     public void onTrigger(final ProcessContext context, final ProcessSession session) throws ProcessException {
         final FlowFile flowFile = session.get();
+        KuduSession kuduSession = null;
         try {
             if (flowFile == null) return;
             final Map<String,String> attributes = new HashMap<String, String>();
             final AtomicReference<Throwable> exceptionHolder = new AtomicReference<>(null);
             final RecordReaderFactory recordReaderFactory = context.getProperty(RECORD_READER).asControllerService(RecordReaderFactory.class);
-            final KuduSession kuduSession = this.getKuduSession(kuduClient);
-
+            final KuduSession finalKuduSession = kuduSession= this.getKuduSession(kuduClient);
             session.read(flowFile, (final InputStream rawIn) -> {
                 RecordReader recordReader = null;
                 try (final BufferedInputStream in = new BufferedInputStream(rawIn)) {
@@ -206,7 +206,7 @@ public abstract class AbstractKudu extends AbstractProcessor {
                         } else {
                             oper = insertRecordToKudu(kuduTable, record, fieldNames);
                         }
-                        kuduSession.apply(oper);
+                        finalKuduSession.apply(oper);
                         numOfAddedRecord++;
                         record = recordSet.next();
                     }
@@ -223,7 +223,7 @@ public abstract class AbstractKudu extends AbstractProcessor {
                     IOUtils.closeQuietly(recordReader);
                 }
             });
-            kuduSession.close();
+            kuduSession.flush();
             if (exceptionHolder.get() != null) {
                 throw exceptionHolder.get();
             }
@@ -240,6 +240,15 @@ public abstract class AbstractKudu extends AbstractProcessor {
         } catch (Throwable t) {
             getLogger().error("Failed to write due to {}", new Object[]{t},t);
             session.transfer(flowFile, REL_FAILURE);
+            session.putAttribute()
+        }finally {
+            if(kuduSession != null) {
+                try {
+                    kuduSession.close();
+                } catch (KuduException e) {
+                    getLogger().warn("failed to close kudu session due to {}",new Object[]{e},e);
+                }
+            }
         }
     }
 
