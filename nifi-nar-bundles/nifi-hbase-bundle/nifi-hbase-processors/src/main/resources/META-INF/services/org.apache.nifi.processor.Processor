@@ -21,3 +21,4 @@ org.apache.nifi.hbase.FetchHBaseRow
 org.apache.nifi.hbase.IncrementHBaseCells
 org.apache.nifi.hbase.PutHBaseAttribute
 org.apache.nifi.hbase.ScanHBase
+org.apache.nifi.hbase.IncrementHBaseRows

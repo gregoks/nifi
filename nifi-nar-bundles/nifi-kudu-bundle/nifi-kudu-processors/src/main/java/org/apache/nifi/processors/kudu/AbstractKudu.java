@@ -240,7 +240,6 @@ public abstract class AbstractKudu extends AbstractProcessor {
         } catch (Throwable t) {
             getLogger().error("Failed to write due to {}", new Object[]{t},t);
             session.transfer(flowFile, REL_FAILURE);
-            session.putAttribute()
         }finally {
             if(kuduSession != null) {
                 try {
