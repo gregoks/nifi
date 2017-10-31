@@ -112,7 +112,7 @@ public class IncrementHBaseRows extends AbstractWriteHBase {
 
     @OnScheduled
     public void onScheduled(ProcessContext context) {
-        //super.onScheduled(context);
+        super.onScheduled(context);
         skipHeadLine = context.getProperty(SKIP_HEAD_LINE).asBoolean();
     }
 static String getName(IncrementColumnResult column){
