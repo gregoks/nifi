@@ -119,7 +119,7 @@ static String getName(IncrementColumnResult column){
 
         StringBuilder sb = new StringBuilder()
                 .append(new String(column.getColumnFamily(), StandardCharsets.UTF_8))
-                .append('.')
+                .append('_')
                 .append(new String(column.getColumnQualifier(), StandardCharsets.UTF_8));
 
 
