@@ -155,7 +155,7 @@ public class IncrementHBaseCells extends AbstractWriteHBase {
                      //if we have a value, add it as an attribute
                     session.putAttribute(incrementFlowFile.getFlowFile(),
                             "hbase.increment." + new String(col.getColumnFamily(), StandardCharsets.UTF_8)
-                                    + "." + new String(col.getColumnQualifier(), StandardCharsets.UTF_8),
+                                    + ":" + new String(col.getColumnQualifier(), StandardCharsets.UTF_8),
                             col.getValue().toString());
                 }
 

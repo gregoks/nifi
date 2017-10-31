@@ -186,8 +186,13 @@ static String getName(IncrementColumnResult column){
                                 Collection<IncrementColumnResult> results = clientService.increment(tableName,rowKeyBytes,columns);
 
                                 Map<String,Object> resultMap = new HashMap<>();
+                                for(String cName :record.getRawFieldNames()){
+                                    resultMap.put(cName,record.getValue(cName));
+                                }
+
                                 resultMap.put("rowId",rowId_Value);
                                 resultMap.put("tableName",tableName);
+
                                 for (IncrementColumnResult res: results) {
                                     resultMap.put(getName(res),res.getValue());
 
