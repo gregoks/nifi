@@ -201,7 +201,7 @@ static String getName(byte[] family,byte[] qualifier,char delimiter){
                                     resultMap.put(getName(res.getColumnFamily(),res.getColumnQualifier(),'_'),res.getValue());
                                     String key = getName(res.getColumnFamily(),res.getColumnQualifier(),':');
                                     Long val = totals.getOrDefault(key, 0L);
-                                    totals.put(key,val+1);
+                                    totals.put(key,val+res.getValue());
                                 }
                                 final MapRecord processed = new MapRecord(writeSchema,resultMap,true,true);
 
