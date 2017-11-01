@@ -115,12 +115,12 @@ public class IncrementHBaseRows extends AbstractWriteHBase {
         super.onScheduled(context);
         skipHeadLine = context.getProperty(SKIP_HEAD_LINE).asBoolean();
     }
-static String getName(IncrementColumnResult column){
+static String getName(byte[] family,byte[] qualifier,char delimiter){
 
         StringBuilder sb = new StringBuilder()
-                .append(new String(column.getColumnFamily(), StandardCharsets.UTF_8))
-                .append('_')
-                .append(new String(column.getColumnQualifier(), StandardCharsets.UTF_8));
+                .append(new String(family, StandardCharsets.UTF_8))
+                .append(delimiter)
+                .append(new String(qualifier, StandardCharsets.UTF_8));
 
 
         return sb.toString();
@@ -159,15 +159,17 @@ static String getName(IncrementColumnResult column){
                             writer.beginRecordSet();
 
                             Record record;
+                            Map<String,Long> totals = new HashMap<>();
                             while ((record = reader.nextRecord()) != null) {
                                 //for each record, create a single row increment
 
                                 List<IncrementColumn> columns = new ArrayList<>();
-
+                                //Map<String,String> names = new HashMap<>();
                                 for(Map.Entry<PropertyDescriptor,String> entry : context.getProperties().entrySet()){
                                     if(!entry.getKey().isDynamic()) continue;
                                     String columnQualifier = entry.getKey().getName();
                                     String fieldName = context.getProperty(entry.getKey().getName()).evaluateAttributeExpressions(original).getValue();
+
                                     Long delta =record.getAsLong(fieldName);
                                     if (delta == null) {
                                         getLogger().error("Invalid Delta value for: "+ columnQualifier);
@@ -177,6 +179,7 @@ static String getName(IncrementColumnResult column){
                                             columnQualifier.getBytes(StandardCharsets.UTF_8),delta);
 
                                     columns.add(incrementColumn);
+                                    //names.put(getName(incrementColumn.getColumnFamily(),incrementColumn.getColumnQualifier()),fieldName);
                                 }
 
                                 String rowId_Value = rowId;
@@ -194,7 +197,11 @@ static String getName(IncrementColumnResult column){
                                 resultMap.put("tableName",tableName);
 
                                 for (IncrementColumnResult res: results) {
-                                    resultMap.put(getName(res),res.getValue());
+
+                                    resultMap.put(getName(res.getColumnFamily(),res.getColumnQualifier(),'_'),res.getValue());
+                                    String key = getName(res.getColumnFamily(),res.getColumnQualifier(),':');
+                                    Long val = totals.getOrDefault(key, 0L);
+                                    totals.put(key,val+1);
                                 }
                                 final MapRecord processed = new MapRecord(writeSchema,resultMap,true,true);
 
@@ -204,6 +211,10 @@ static String getName(IncrementColumnResult column){
                             final WriteResult writeResult = writer.finishRecordSet();
                             attributes.put("record.count", String.valueOf(writeResult.getRecordCount()));
                             attributes.put(CoreAttributes.MIME_TYPE.key(), writer.getMimeType());
+                            for (Map.Entry<String,Long> entry:totals.entrySet()
+                                 ) {
+                                attributes.put("hbase.increment." + entry.getKey(), String.valueOf(entry.getValue()));
+                            }
                             attributes.putAll(writeResult.getAttributes());
                             recordCount.set(writeResult.getRecordCount());
                         }
