@@ -292,7 +292,7 @@ public class HBase_1_1_2_ClientService extends AbstractControllerService impleme
     }
 
     private static long getLongValue(byte[] bytes) {
-        ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES).order(ByteOrder.LITTLE_ENDIAN);
+        ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES).order(ByteOrder.BIG_ENDIAN);
         buffer.put(bytes);
 
         buffer.flip();//need flip

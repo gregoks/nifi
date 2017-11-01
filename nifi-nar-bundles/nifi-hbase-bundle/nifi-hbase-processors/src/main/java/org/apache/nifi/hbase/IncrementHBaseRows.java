@@ -195,7 +195,6 @@ static String getName(IncrementColumnResult column){
 
                                 for (IncrementColumnResult res: results) {
                                     resultMap.put(getName(res),res.getValue());
-
                                 }
                                 final MapRecord processed = new MapRecord(writeSchema,resultMap,true,true);
 
