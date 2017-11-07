@@ -22,13 +22,8 @@ import java.io.IOException;
 import java.io.InputStream;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.kudu.client.KuduClient;
-import org.apache.kudu.client.KuduException;
-import org.apache.kudu.client.KuduSession;
-import org.apache.kudu.client.KuduTable;
-import org.apache.kudu.client.Insert;
-import org.apache.kudu.client.Upsert;
-import org.apache.kudu.client.SessionConfiguration;
+import org.apache.kudu.WireProtocol;
+import org.apache.kudu.client.*;
 
 import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.annotation.lifecycle.OnStopped;
@@ -52,6 +47,7 @@ import org.apache.nifi.serialization.record.Record;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 public abstract class AbstractKudu extends AbstractProcessor {
@@ -146,7 +142,7 @@ public abstract class AbstractKudu extends AbstractProcessor {
         try {
             tableName = context.getProperty(TABLE_NAME).evaluateAttributeExpressions().getValue();
             kuduMasters = context.getProperty(KUDU_MASTERS).evaluateAttributeExpressions().getValue();
-            if(kuduClient == null) {
+            if (kuduClient == null) {
                 getLogger().debug("Setting up Kudu connection...");
                 kuduClient = getKuduConnection(kuduMasters);
                 kuduTable = this.getKuduTable(kuduClient, tableName);
@@ -157,7 +153,7 @@ public abstract class AbstractKudu extends AbstractProcessor {
             batchSize = context.getProperty(BATCH_SIZE).evaluateAttributeExpressions().asInteger();
             flushMode = SessionConfiguration.FlushMode.valueOf(context.getProperty(FLUSH_MODE).getValue());
             skipHeadLine = context.getProperty(SKIP_HEAD_LINE).asBoolean();
-        } catch(KuduException ex){
+        } catch (KuduException ex) {
             getLogger().error("Exception occurred while interacting with Kudu due to " + ex.getMessage(), ex);
         }
     }
@@ -171,16 +167,86 @@ public abstract class AbstractKudu extends AbstractProcessor {
         }
     }
 
+    private static WireProtocol.AppStatusPB.ErrorCode getErrorCode(Status status) {
+        if (status.ok()) return WireProtocol.AppStatusPB.ErrorCode.OK;
+        if (status.isAborted()) return WireProtocol.AppStatusPB.ErrorCode.ABORTED;
+        if (status.isAlreadyPresent()) return WireProtocol.AppStatusPB.ErrorCode.ALREADY_PRESENT;
+        if (status.isConfigurationError()) return WireProtocol.AppStatusPB.ErrorCode.CONFIGURATION_ERROR;
+        if (status.isCorruption()) return WireProtocol.AppStatusPB.ErrorCode.CORRUPTION;
+        if (status.isEndOfFile()) return WireProtocol.AppStatusPB.ErrorCode.END_OF_FILE;
+        if (status.isIllegalState()) return WireProtocol.AppStatusPB.ErrorCode.ILLEGAL_STATE;
+        if (status.isIncomplete()) return WireProtocol.AppStatusPB.ErrorCode.INCOMPLETE;
+        if (status.isInvalidArgument()) return WireProtocol.AppStatusPB.ErrorCode.INVALID_ARGUMENT;
+        if (status.isIOError()) return WireProtocol.AppStatusPB.ErrorCode.IO_ERROR;
+        if (status.isNetworkError()) return WireProtocol.AppStatusPB.ErrorCode.NETWORK_ERROR;
+        if (status.isNotAuthorized()) return WireProtocol.AppStatusPB.ErrorCode.NOT_AUTHORIZED;
+        if (status.isNotFound()) return WireProtocol.AppStatusPB.ErrorCode.NOT_FOUND;
+        if (status.isNotSupported()) return WireProtocol.AppStatusPB.ErrorCode.NOT_SUPPORTED;
+        if (status.isRemoteError()) return WireProtocol.AppStatusPB.ErrorCode.REMOTE_ERROR;
+        if (status.isRuntimeError()) return WireProtocol.AppStatusPB.ErrorCode.RUNTIME_ERROR;
+        if (status.isServiceUnavailable()) return WireProtocol.AppStatusPB.ErrorCode.SERVICE_UNAVAILABLE;
+        if (status.isTimedOut()) return WireProtocol.AppStatusPB.ErrorCode.TIMED_OUT;
+        if (status.isUninitialized()) return WireProtocol.AppStatusPB.ErrorCode.UNINITIALIZED;
+        return WireProtocol.AppStatusPB.ErrorCode.UNKNOWN_ERROR;
+    }
+
+    static String getErrorString(WireProtocol.AppStatusPB.ErrorCode code) {
+        switch (code) {
+
+            case UNKNOWN_ERROR:
+                return "UNKNOWN_ERROR";
+            case OK:
+                return "OK";
+            case NOT_FOUND:
+                return "NOT_FOUND";
+            case CORRUPTION:
+                return "CORRUPTION";
+            case NOT_SUPPORTED:
+                return "NOT_SUPPORTED";
+            case INVALID_ARGUMENT:
+                return "INVALID_ARGUMENT";
+            case IO_ERROR:
+                return "IO_ERROR";
+            case ALREADY_PRESENT:
+                return "ALREADY_PRESENT";
+            case RUNTIME_ERROR:
+                return "RUNTIME_ERROR";
+            case NETWORK_ERROR:
+                return "NETWORK_ERROR";
+            case ILLEGAL_STATE:
+                return "ILLEGAL_STATE";
+            case NOT_AUTHORIZED:
+                return "NOT_AUTHORIZED";
+            case ABORTED:
+                return "ABORTED";
+            case REMOTE_ERROR:
+                return "REMOTE_ERROR";
+            case SERVICE_UNAVAILABLE:
+                return "SERVICE_UNAVAILABLE";
+            case TIMED_OUT:
+                return "TIMED_OUT";
+            case UNINITIALIZED:
+                return "UNINITIALIZED";
+            case CONFIGURATION_ERROR:
+                return "CONFIGURATION_ERROR";
+            case INCOMPLETE:
+                return "INCOMPLETE";
+            case END_OF_FILE:
+                return "END_OF_FILE";
+        }
+        return "UNKNOWN";
+    }
+
     @Override
     public void onTrigger(final ProcessContext context, final ProcessSession session) throws ProcessException {
         final FlowFile flowFile = session.get();
         KuduSession kuduSession = null;
         try {
             if (flowFile == null) return;
-            final Map<String,String> attributes = new HashMap<String, String>();
+            final Map<String, String> attributes = new HashMap<String, String>();
             final AtomicReference<Throwable> exceptionHolder = new AtomicReference<>(null);
             final RecordReaderFactory recordReaderFactory = context.getProperty(RECORD_READER).asControllerService(RecordReaderFactory.class);
-            final KuduSession finalKuduSession = kuduSession= this.getKuduSession(kuduClient);
+            final KuduSession finalKuduSession = kuduSession = this.getKuduSession(kuduClient);
             session.read(flowFile, (final InputStream rawIn) -> {
                 RecordReader recordReader = null;
                 try (final BufferedInputStream in = new BufferedInputStream(rawIn)) {
@@ -201,7 +267,7 @@ public abstract class AbstractKudu extends AbstractProcessor {
                     Record record = recordSet.next();
                     while (record != null) {
                         org.apache.kudu.client.Operation oper = null;
-                        if(operationType == OperationType.UPSERT) {
+                        if (operationType == OperationType.UPSERT) {
                             oper = upsertRecordToKudu(kuduTable, record, fieldNames);
                         } else {
                             oper = insertRecordToKudu(kuduTable, record, fieldNames);
@@ -223,9 +289,28 @@ public abstract class AbstractKudu extends AbstractProcessor {
                     IOUtils.closeQuietly(recordReader);
                 }
             });
-            kuduSession.flush();
+            List<OperationResponse> responses = kuduSession.flush();
+
+
             if (exceptionHolder.get() != null) {
                 throw exceptionHolder.get();
+            }
+
+            Map<WireProtocol.AppStatusPB.ErrorCode, AtomicInteger> errors = new HashMap<>();
+            for (OperationResponse resp : responses) {
+                if (resp.hasRowError()) {
+                    RowError e = resp.getRowError();
+                    WireProtocol.AppStatusPB.ErrorCode errorCode = getErrorCode(e.getErrorStatus());
+                    AtomicInteger atomicInteger = errors.get(errorCode);
+                    if (atomicInteger == null) {
+                        atomicInteger = new AtomicInteger();
+                        errors.put(errorCode, atomicInteger);
+                    }
+                    atomicInteger.incrementAndGet();
+                }
+            }
+            for (Map.Entry<WireProtocol.AppStatusPB.ErrorCode, AtomicInteger> entry : errors.entrySet()) {
+                attributes.put("kudu.errors." + getErrorString(entry.getKey()), String.valueOf(entry.getValue().get()));
             }
 
             // Update flow file's attributes after the ingestion
@@ -235,17 +320,17 @@ public abstract class AbstractKudu extends AbstractProcessor {
             session.getProvenanceReporter().send(flowFile, "Successfully added flowfile to kudu");
 
         } catch (IOException | FlowFileAccessException e) {
-            getLogger().error("Failed to write due to {}", new Object[]{e},e);
+            getLogger().error("Failed to write due to {}", new Object[]{e}, e);
             session.transfer(flowFile, REL_FAILURE);
         } catch (Throwable t) {
-            getLogger().error("Failed to write due to {}", new Object[]{t},t);
+            getLogger().error("Failed to write due to {}", new Object[]{t}, t);
             session.transfer(flowFile, REL_FAILURE);
-        }finally {
-            if(kuduSession != null) {
+        } finally {
+            if (kuduSession != null) {
                 try {
                     kuduSession.close();
                 } catch (KuduException e) {
-                    getLogger().warn("failed to close kudu session due to {}",new Object[]{e},e);
+                    getLogger().warn("failed to close kudu session due to {}", new Object[]{e}, e);
                 }
             }
         }
@@ -259,14 +344,14 @@ public abstract class AbstractKudu extends AbstractProcessor {
         return client.openTable(tableName);
     }
 
-    protected KuduSession getKuduSession(KuduClient client){
+    protected KuduSession getKuduSession(KuduClient client) {
 
         KuduSession kuduSession = client.newSession();
 
         kuduSession.setMutationBufferSpace(batchSize);
         kuduSession.setFlushMode(flushMode);
 
-        if(operationType == OperationType.INSERT_IGNORE){
+        if (operationType == OperationType.INSERT_IGNORE) {
             kuduSession.setIgnoreAllDuplicateRows(true);
         }
 
@@ -274,6 +359,7 @@ public abstract class AbstractKudu extends AbstractProcessor {
     }
 
     protected abstract Insert insertRecordToKudu(final KuduTable table, final Record record, final List<String> fields) throws Exception;
+
     protected abstract Upsert upsertRecordToKudu(final KuduTable table, final Record record, final List<String> fields) throws Exception;
 }
 
