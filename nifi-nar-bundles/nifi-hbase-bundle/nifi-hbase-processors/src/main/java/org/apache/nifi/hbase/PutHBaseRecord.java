@@ -38,15 +38,13 @@ import org.apache.nifi.serialization.RecordReaderFactory;
 import org.apache.nifi.serialization.record.Record;
 import org.apache.nifi.serialization.record.RecordFieldType;
 import org.apache.nifi.serialization.record.RecordSchema;
+import org.apache.nifi.serialization.record.SerializedForm;
 import org.apache.nifi.serialization.record.util.IllegalTypeConversionException;
 import org.apache.nifi.util.StringUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 @EventDriven
 @SupportsBatching
@@ -79,11 +77,13 @@ public class PutHBaseRecord extends AbstractPutHBase {
     protected static final String WARN_VALUE = "Warn";
     protected static final String IGNORE_VALUE = "Ignore";
     protected static final String TEXT_VALUE = "Text";
+    protected static final String SERIALIZED_VALUE = "Serialized";
 
     protected static final AllowableValue COMPLEX_FIELD_FAIL = new AllowableValue(FAIL_VALUE, FAIL_VALUE, "Route entire FlowFile to failure if any elements contain complex values.");
     protected static final AllowableValue COMPLEX_FIELD_WARN = new AllowableValue(WARN_VALUE, WARN_VALUE, "Provide a warning and do not include field in row sent to HBase.");
     protected static final AllowableValue COMPLEX_FIELD_IGNORE = new AllowableValue(IGNORE_VALUE, IGNORE_VALUE, "Silently ignore and do not include in row sent to HBase.");
     protected static final AllowableValue COMPLEX_FIELD_TEXT = new AllowableValue(TEXT_VALUE, TEXT_VALUE, "Use the string representation of the complex field as the value of the given column.");
+    protected static final AllowableValue COMPLEX_FIELD_SERIALIZED = new AllowableValue(SERIALIZED_VALUE, SERIALIZED_VALUE, "Use the JSON string representation of the complex field as the value of the given column.");
 
     static final PropertyDescriptor RECORD_READER_FACTORY = new PropertyDescriptor.Builder()
             .name("record-reader")
@@ -98,7 +98,7 @@ public class PutHBaseRecord extends AbstractPutHBase {
             .description("Indicates how to handle complex fields, i.e. fields that do not have a single text value.")
             .expressionLanguageSupported(false)
             .required(true)
-            .allowableValues(COMPLEX_FIELD_FAIL, COMPLEX_FIELD_WARN, COMPLEX_FIELD_IGNORE, COMPLEX_FIELD_TEXT)
+            .allowableValues(COMPLEX_FIELD_FAIL, COMPLEX_FIELD_WARN, COMPLEX_FIELD_IGNORE, COMPLEX_FIELD_TEXT, COMPLEX_FIELD_SERIALIZED)
             .defaultValue(COMPLEX_FIELD_TEXT.getValue())
             .build();
 
@@ -312,6 +312,21 @@ public class PutHBaseRecord extends AbstractPutHBase {
             case WARN_VALUE:
                 getLogger().warn("Complex value found for {}; skipping", new Object[]{field});
                 return null;
+            case SERIALIZED_VALUE:
+
+                Optional<SerializedForm> serializedForm = record.getSerializedForm();
+                if (serializedForm.isPresent()) {
+                    final SerializedForm form = serializedForm.get();
+                        final Object serialized = form.getSerialized();
+                        if (serialized instanceof String) {
+                           final String value =(String) serialized;
+                            return clientService.toBytes(value);
+
+                        }else if(serialized instanceof byte[]){
+                            return (byte[]) serialized;
+                        }
+                }
+                getLogger().info("Complex value found for {}; but could not get serialized string", new Object[]{field});
             case TEXT_VALUE:
                 final String value = record.getAsString(field);
                 return clientService.toBytes(value);
