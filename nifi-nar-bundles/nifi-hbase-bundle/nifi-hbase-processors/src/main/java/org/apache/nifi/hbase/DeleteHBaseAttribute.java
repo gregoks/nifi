@@ -172,7 +172,7 @@ public class DeleteHBaseAttribute extends AbstractWriteHBase {
     }
 
 
-    protected String getTransitUri(AbstractActionFlowFile actionFlowFile) {
+    protected String getTransitUri(DeleteFlowFile actionFlowFile) {
         return "hbase://" + actionFlowFile.getTableName() + "/" + new String(actionFlowFile.getRow(), StandardCharsets.UTF_8);
     }
 
