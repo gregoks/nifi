@@ -42,11 +42,11 @@ import java.util.regex.Pattern;
 @SupportsBatching
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @Tags({"hadoop", "hbase"})
-@CapabilityDescription("Adds the attribute values of a FlowFile to HBase as the value of a single cell")
+@CapabilityDescription("Deletes the attribute values of a FlowFile to HBase base on a check of the value of a single cell")
 public class DeleteHBaseAttribute extends AbstractWriteHBase {
     protected static final PropertyDescriptor DELETE_COLUMNS = new PropertyDescriptor.Builder()
             .name("Delete cells")
-            .description("A comma seperated list of cells to remove if the test is successfull")
+            .description("A comma separated list of cells to remove if the test is successfull")
             .required(true)
             .expressionLanguageSupported(true)
             .addValidator(StandardValidators.createRegexMatchingValidator(Pattern.compile("^[a-zA-Z]\\w*:[a-zA-Z]\\w*(,[a-zA-Z]\\w*:[a-zA-Z]\\w*)*$")))
@@ -183,6 +183,7 @@ public class DeleteHBaseAttribute extends AbstractWriteHBase {
         final String columnQualifier = context.getProperty(COLUMN_QUALIFIER).evaluateAttributeExpressions(flowFile).getValue();
         final String timestampValue = context.getProperty(TIMESTAMP).evaluateAttributeExpressions(flowFile).getValue();
         final String value = context.getProperty(TEST_VALUE).evaluateAttributeExpressions(flowFile).getValue();
+        final String cells = context.getProperty(DELETE_COLUMNS).evaluateAttributeExpressions(flowFile).getValue();
 
 
         final Long timestamp;
@@ -198,10 +199,10 @@ public class DeleteHBaseAttribute extends AbstractWriteHBase {
         }
 
         Collection<DeleteColumn> columns = new ArrayList<>();
+        String[] cellItems = cells.split(",");
 
-        for(Map.Entry<PropertyDescriptor,String> entry : context.getProperties().entrySet()){
-            if(!entry.getKey().isDynamic()) continue;
-            String fieldName = entry.getKey().getName();
+        for(String fieldName:cellItems){
+            if(fieldName.length() == 0) continue;
             int split = fieldName.indexOf(':');
             if(split <=0)
             {
