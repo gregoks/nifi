@@ -104,9 +104,6 @@ abstract class AbstractWriteHBase extends AbstractProcessor {
     protected String getTransitUri(String tableName,byte[] row) {
         return "hbase://" + tableName + "/" + new String(row, StandardCharsets.UTF_8);
     }
-    protected String getTransitUri(AbstractActionFlowFile actionFlowFile) {
-        return "hbase://" + actionFlowFile.getTableName() + "/" + new String(actionFlowFile.getRow(), StandardCharsets.UTF_8);
-    }
 
     protected byte[] getRow(final String row, final String encoding) {
         //check to see if we need to modify the rowKey before we pass it down to the PutFlowFile

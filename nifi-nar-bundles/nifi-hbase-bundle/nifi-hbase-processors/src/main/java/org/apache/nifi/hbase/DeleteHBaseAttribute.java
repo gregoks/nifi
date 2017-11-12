@@ -172,6 +172,10 @@ public class DeleteHBaseAttribute extends AbstractWriteHBase {
     }
 
 
+    protected String getTransitUri(AbstractActionFlowFile actionFlowFile) {
+        return "hbase://" + actionFlowFile.getTableName() + "/" + new String(actionFlowFile.getRow(), StandardCharsets.UTF_8);
+    }
+
     protected DeleteFlowFile createDelete(final ProcessSession session, final ProcessContext context, final FlowFile flowFile) {
         final String tableName = context.getProperty(TABLE_NAME).evaluateAttributeExpressions(flowFile).getValue();
         final String row = context.getProperty(ROW_ID).evaluateAttributeExpressions(flowFile).getValue();
