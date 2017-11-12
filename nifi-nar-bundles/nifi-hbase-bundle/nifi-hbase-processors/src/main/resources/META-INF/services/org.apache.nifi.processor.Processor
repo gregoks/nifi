@@ -22,3 +22,4 @@ org.apache.nifi.hbase.IncrementHBaseCells
 org.apache.nifi.hbase.PutHBaseAttribute
 org.apache.nifi.hbase.ScanHBase
 org.apache.nifi.hbase.IncrementHBaseRows
+org.apache.nifi.hbase.DeleteHBaseAttribute

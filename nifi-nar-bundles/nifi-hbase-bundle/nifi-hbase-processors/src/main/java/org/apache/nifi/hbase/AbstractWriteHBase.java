@@ -83,7 +83,7 @@ abstract class AbstractWriteHBase extends AbstractProcessor {
                     "grouped by table, and a single Put per table will be performed.")
             .required(true)
             .addValidator(StandardValidators.POSITIVE_INTEGER_VALIDATOR)
-            .defaultValue("25")
+            .defaultValue("5")
             .build();
 
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
@@ -104,11 +104,8 @@ abstract class AbstractWriteHBase extends AbstractProcessor {
     protected String getTransitUri(String tableName,byte[] row) {
         return "hbase://" + tableName + "/" + new String(row, StandardCharsets.UTF_8);
     }
-    protected String getTransitUri(PutFlowFile putFlowFile) {
-        return "hbase://" + putFlowFile.getTableName() + "/" + new String(putFlowFile.getRow(), StandardCharsets.UTF_8);
-    }
-    protected String getTransitUri(IncrementFlowFile putFlowFile) {
-        return "hbase://" + putFlowFile.getTableName() + "/" + new String(putFlowFile.getRow(), StandardCharsets.UTF_8);
+    protected String getTransitUri(AbstractActionFlowFile actionFlowFile) {
+        return "hbase://" + actionFlowFile.getTableName() + "/" + new String(actionFlowFile.getRow(), StandardCharsets.UTF_8);
     }
 
     protected byte[] getRow(final String row, final String encoding) {

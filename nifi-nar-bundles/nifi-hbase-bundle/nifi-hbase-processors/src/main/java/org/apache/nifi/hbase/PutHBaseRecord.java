@@ -243,7 +243,7 @@ public class PutHBaseRecord extends AbstractPutHBase {
         session.getProvenanceReporter().send(flowFile, getTransitUri(pff), details, time);
     }
 
-    @Override
+
     protected String getTransitUri(PutFlowFile putFlowFile) {
         return "hbase://" + putFlowFile.getTableName();
     }
@@ -325,8 +325,9 @@ public class PutHBaseRecord extends AbstractPutHBase {
                         }else if(serialized instanceof byte[]){
                             return (byte[]) serialized;
                         }
+                    getLogger().info("Complex value found for {} ({} - {}); but could not get serialized string", new Object[]{field,form.getMimeType(),serialized.getClass()});
                 }
-                getLogger().info("Complex value found for {}; but could not get serialized string", new Object[]{field});
+
             case TEXT_VALUE:
                 final String value = record.getAsString(field);
                 return clientService.toBytes(value);

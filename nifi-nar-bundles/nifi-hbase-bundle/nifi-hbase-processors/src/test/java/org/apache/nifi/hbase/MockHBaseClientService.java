@@ -18,6 +18,7 @@ package org.apache.nifi.hbase;
 
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.nifi.controller.AbstractControllerService;
+import org.apache.nifi.hbase.delete.DeleteColumn;
 import org.apache.nifi.hbase.increment.IncrementColumn;
 import org.apache.nifi.hbase.increment.IncrementColumnResult;
 import org.apache.nifi.hbase.increment.IncrementFlowFile;
@@ -88,6 +89,12 @@ public class MockHBaseClientService extends AbstractControllerService implements
 
     @Override
     public boolean checkAndPut(String tableName, byte[] rowId, byte[] family, byte[] qualifier, byte[]value, PutColumn column) throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+
+    @Override
+    public boolean checkAndDelete(String tableName, byte[] rowId, byte[] family, byte[] qualifier, byte[] value,Collection<DeleteColumn> deletes) throws IOException {
         throw new UnsupportedOperationException();
     }
 

@@ -1,23 +1,23 @@
 package org.apache.nifi.hbase.increment;
 
 import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.hbase.AbstractActionFlowFile;
 import org.apache.nifi.hbase.put.PutColumn;
 
 import java.util.ArrayList;
 import java.util.Collection;
 
-public class IncrementFlowFile {
-    private final String tableName;
-    private final byte[] row;
+public class IncrementFlowFile extends AbstractActionFlowFile {
+
+
     private final Collection<IncrementColumn> columns;
     private final Collection<IncrementColumnResult> columnResults=new ArrayList<>();
-    private final FlowFile flowFile;
+
 
     public IncrementFlowFile(String tableName, byte[] row, Collection<IncrementColumn> columns, FlowFile flowFile) {
-        this.tableName = tableName;
-        this.row = row;
+        super(tableName, row, flowFile);
         this.columns = columns;
-        this.flowFile = flowFile;
+
     }
 
     public IncrementFlowFile setColumnResults(Collection<IncrementColumnResult> results){
@@ -30,24 +30,15 @@ public class IncrementFlowFile {
         return columnResults;
     }
 
-    public String getTableName() {
-        return tableName;
-    }
-
-    public byte[] getRow() {
-        return row;
-    }
 
     public Collection<IncrementColumn> getColumns() {
         return columns;
     }
 
-    public FlowFile getFlowFile() {
-        return flowFile;
-    }
+
 
     public boolean isValid() {
-        if (tableName == null || tableName.trim().isEmpty() || null == row || flowFile == null || columns == null || columns.isEmpty()) {
+        if (!super.isValid() || columns == null || columns.isEmpty()) {
             return false;
         }
 
@@ -64,10 +55,8 @@ public class IncrementFlowFile {
     public boolean equals(Object obj) {
         if (obj instanceof IncrementFlowFile) {
             IncrementFlowFile iff = (IncrementFlowFile)obj;
-            return this.tableName.equals(iff.tableName)
-                    && this.row.equals(iff.row)
-                    && this.columns.equals(iff.columns)
-                    && this.flowFile.equals(iff.flowFile);
+            return super.equals(obj)
+                    && this.columns.equals(iff.columns);
         } else {
             return false;
         }

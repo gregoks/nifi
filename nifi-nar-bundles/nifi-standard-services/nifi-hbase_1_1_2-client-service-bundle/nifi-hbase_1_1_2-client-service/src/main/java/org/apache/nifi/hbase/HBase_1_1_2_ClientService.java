@@ -42,6 +42,7 @@ import org.apache.nifi.controller.ControllerServiceInitializationContext;
 import org.apache.nifi.hadoop.KerberosProperties;
 import org.apache.nifi.hadoop.KerberosTicketRenewer;
 import org.apache.nifi.hadoop.SecurityUtil;
+import org.apache.nifi.hbase.delete.DeleteColumn;
 import org.apache.nifi.hbase.increment.IncrementColumn;
 import org.apache.nifi.hbase.increment.IncrementColumnResult;
 import org.apache.nifi.hbase.increment.IncrementFlowFile;
@@ -417,6 +418,22 @@ public class HBase_1_1_2_ClientService extends AbstractControllerService impleme
                 column.getColumnQualifier(),
                 column.getBuffer());
             return table.checkAndPut(rowId, family, qualifier, value, put);
+        }
+    }
+
+    @Override
+    public boolean checkAndDelete(String tableName, byte[] rowId, byte[] family, byte[] qualifier, byte[] value, Collection<DeleteColumn> deletes) throws IOException {
+        try (final Table table = connection.getTable(TableName.valueOf(tableName))) {
+           Delete delete = new Delete(rowId);
+            for (DeleteColumn del :
+                    deletes) {
+                if(del.getTimestamp() != null){
+                    delete.addColumn( del.getColumnFamily(),del.getColumnQualifier(), del.getTimestamp());
+                }else
+                    delete.addColumn( del.getColumnFamily(),del.getColumnQualifier());
+            }
+
+            return table.checkAndDelete(rowId, family, qualifier, value, delete);
         }
     }
 

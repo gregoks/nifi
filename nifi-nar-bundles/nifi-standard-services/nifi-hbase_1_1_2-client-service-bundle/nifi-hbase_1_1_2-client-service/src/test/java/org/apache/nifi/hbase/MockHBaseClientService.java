@@ -22,6 +22,7 @@ import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.filter.Filter;
 import org.apache.nifi.controller.ConfigurationContext;
 import org.apache.nifi.hadoop.KerberosProperties;
+import org.apache.nifi.hbase.delete.DeleteColumn;
 import org.apache.nifi.hbase.increment.IncrementColumn;
 import org.apache.nifi.hbase.increment.IncrementColumnResult;
 import org.apache.nifi.hbase.increment.IncrementFlowFile;
@@ -203,6 +204,35 @@ public class MockHBaseClientService extends HBase_1_1_2_ClientService {
         final List<PutColumn> putColumns = new ArrayList<PutColumn>();
         putColumns.add(column);
         put(tableName, rowId, putColumns);
+        return true;
+    }
+
+    @Override
+    public boolean checkAndDelete(String tableName, byte[] rowId, byte[] family, byte[] qualifier, byte[] value,Collection<DeleteColumn> deletes) throws IOException {
+
+        for (Result result : results) {
+            if (Arrays.equals(result.getRow(), rowId)) {
+                Cell[] cellArray = result.rawCells();
+                for (Cell cell : cellArray) {
+                    if (Arrays.equals(cell.getFamilyArray(), family) && Arrays.equals(cell.getQualifierArray(), qualifier)) {
+                        if (value == null || !Arrays.equals(cell.getValueArray(), value)) {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+        Delete delete = new Delete(rowId);
+        for (DeleteColumn del :
+                deletes) {
+            if(del.getTimestamp() != null){
+                delete.addColumn( del.getColumnFamily(),del.getColumnQualifier(), del.getTimestamp());
+            }else
+                delete.addColumn( del.getColumnFamily(),del.getColumnQualifier());
+        }
+
+        table.delete(delete);
+
         return true;
     }
 
