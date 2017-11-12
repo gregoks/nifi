@@ -61,7 +61,7 @@ public class DeleteHBaseAttribute extends AbstractWriteHBase {
             .build();
 
     public static final Relationship REL_NOMATCH = new Relationship.Builder()
-            .name("no match")
+            .name("no_match")
             .description("A FlowFile is routed to this relationship if the row was not matched")
             .build();
 
