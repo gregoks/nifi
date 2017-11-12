@@ -169,7 +169,7 @@ public class IncrementHBaseCells extends AbstractWriteHBase {
 
     }
 
-    protected String getTransitUri(AbstractActionFlowFile actionFlowFile) {
+    protected String getTransitUri(IncrementFlowFile actionFlowFile) {
         return "hbase://" + actionFlowFile.getTableName() + "/" + new String(actionFlowFile.getRow(), StandardCharsets.UTF_8);
     }
 

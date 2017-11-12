@@ -115,7 +115,7 @@ public abstract class AbstractPutHBase extends AbstractWriteHBase {
     }
 
 
-    protected String getTransitUri(AbstractActionFlowFile actionFlowFile) {
+    protected String getTransitUri(PutFlowFile actionFlowFile) {
         return "hbase://" + actionFlowFile.getTableName() + "/" + new String(actionFlowFile.getRow(), StandardCharsets.UTF_8);
     }
 
