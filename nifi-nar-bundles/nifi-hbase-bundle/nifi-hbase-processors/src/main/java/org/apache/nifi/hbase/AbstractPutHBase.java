@@ -114,6 +114,11 @@ public abstract class AbstractPutHBase extends AbstractWriteHBase {
 
     }
 
+
+    protected String getTransitUri(AbstractActionFlowFile actionFlowFile) {
+        return "hbase://" + actionFlowFile.getTableName() + "/" + new String(actionFlowFile.getRow(), StandardCharsets.UTF_8);
+    }
+
     /**
      * Sub-classes provide the implementation to create a put from a FlowFile.
      *
