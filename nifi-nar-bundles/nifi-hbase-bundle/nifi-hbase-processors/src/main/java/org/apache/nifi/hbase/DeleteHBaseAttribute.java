@@ -55,9 +55,8 @@ public class DeleteHBaseAttribute extends AbstractWriteHBase {
     protected static final PropertyDescriptor TEST_VALUE = new PropertyDescriptor.Builder()
             .name("Test Value")
             .description("The value to test if exists in the cell before deleting")
-            .required(true)
+            .required(false)
             .expressionLanguageSupported(true)
-            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
             .build();
 
     public static final Relationship REL_NOMATCH = new Relationship.Builder()
@@ -72,10 +71,12 @@ public class DeleteHBaseAttribute extends AbstractWriteHBase {
         properties.add(TABLE_NAME);
         properties.add(ROW_ID);
         properties.add(ROW_ID_ENCODING_STRATEGY);
+
         properties.add(COLUMN_FAMILY);
         properties.add(COLUMN_QUALIFIER);
-        properties.add(TEST_VALUE);
-        properties.add(DELETE_COLUMNS);
+
+        //properties.add(TEST_VALUE);
+        //properties.add(DELETE_COLUMNS);
 
         properties.add(BATCH_SIZE);
         return properties;

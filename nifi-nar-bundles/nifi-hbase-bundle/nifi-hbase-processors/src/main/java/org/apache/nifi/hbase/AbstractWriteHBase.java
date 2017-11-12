@@ -83,7 +83,7 @@ abstract class AbstractWriteHBase extends AbstractProcessor {
                     "grouped by table, and a single Put per table will be performed.")
             .required(true)
             .addValidator(StandardValidators.POSITIVE_INTEGER_VALIDATOR)
-            .defaultValue("5")
+            .defaultValue("25")
             .build();
 
     public static final Relationship REL_SUCCESS = new Relationship.Builder()
