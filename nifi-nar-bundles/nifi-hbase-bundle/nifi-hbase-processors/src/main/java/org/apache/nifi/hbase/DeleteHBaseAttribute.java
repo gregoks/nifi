@@ -22,6 +22,7 @@ import org.apache.nifi.annotation.behavior.SupportsBatching;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.components.PropertyDescriptor;
+import org.apache.nifi.components.Validator;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.hbase.delete.DeleteColumn;
 import org.apache.nifi.hbase.delete.DeleteFlowFile;
@@ -57,6 +58,7 @@ public class DeleteHBaseAttribute extends AbstractWriteHBase {
             .description("The value to test if exists in the cell before deleting")
             .required(false)
             .expressionLanguageSupported(true)
+            .addValidator(Validator.VALID)
             .build();
 
     public static final Relationship REL_NOMATCH = new Relationship.Builder()
