@@ -75,8 +75,8 @@ public class DeleteHBaseAttribute extends AbstractWriteHBase {
         properties.add(COLUMN_FAMILY);
         properties.add(COLUMN_QUALIFIER);
 
-        //properties.add(TEST_VALUE);
-        //properties.add(DELETE_COLUMNS);
+        properties.add(TEST_VALUE);
+        properties.add(DELETE_COLUMNS);
 
         properties.add(BATCH_SIZE);
         return properties;
