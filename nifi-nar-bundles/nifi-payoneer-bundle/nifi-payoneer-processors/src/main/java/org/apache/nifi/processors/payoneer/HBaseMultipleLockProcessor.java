@@ -192,8 +192,8 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
 
                 if (delta != lock_ids.size()) {
                     //invalid lock count, need to revert
-                    int released = revert(session, flowFile, tableName, increments, lock_ids, context);
-                    session.putAttribute(flowFile,"locks.released",String.valueOf(released));
+                    revert(session, flowFile, tableName, increments, lock_ids, context);
+
 
                 } else {
                     //so now we have locks, we must place the job into the cell
@@ -202,8 +202,8 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
                         session.transfer(flowFile, REL_ACQUIRED);
                     } catch (IOException ex) {
                         //we need to revert
-                        int released = revert(session, flowFile, tableName, increments, lock_ids, context);
-                        session.putAttribute(flowFile,"locks.released",String.valueOf(released));
+                         revert(session, flowFile, tableName, increments, lock_ids, context);
+
                     }
                 }
             } catch (IOException e) {
@@ -247,8 +247,10 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
         }
         int unlocked = 0;
         //now release old
-        if (expiration != null)
+        if (expiration != null) {
             unlocked = releaseExpiredLocks(flowFile, tableName, lock_ids, context, expiration);
+            session.putAttribute(flowFile,"locks.released",String.valueOf(unlocked));
+        }
 
         session.transfer(flowFile, REL_NOLOCK);
         return unlocked;
