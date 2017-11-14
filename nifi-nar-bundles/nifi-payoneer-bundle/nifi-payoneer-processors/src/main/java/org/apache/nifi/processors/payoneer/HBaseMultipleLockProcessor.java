@@ -26,11 +26,14 @@ import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.Tags;
+import org.apache.nifi.hbase.delete.DeleteColumn;
 import org.apache.nifi.hbase.increment.IncrementColumn;
 import org.apache.nifi.hbase.increment.IncrementColumnResult;
 import org.apache.nifi.hbase.increment.IncrementFlowFile;
 import org.apache.nifi.hbase.put.PutColumn;
 import org.apache.nifi.hbase.put.PutFlowFile;
+import org.apache.nifi.hbase.scan.ResultCell;
+import org.apache.nifi.hbase.scan.ResultHandler;
 import org.apache.nifi.json.JsonPathValidator;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.AbstractProcessor;
@@ -47,6 +50,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @EventDriven
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
@@ -64,12 +68,20 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
             .description("A FlowFile is routed to this relationship if the service could not acquire all the locks")
             .build();
 
+    protected static final PropertyDescriptor LOCK_EXPIRATION = new PropertyDescriptor.Builder()
+            .name("lock_expiration")
+            .displayName("Lock expiration")
+            .description("When set, releases expired locks on failure")
+            .expressionLanguageSupported(true)
+            .addValidator(StandardValidators.POSITIVE_LONG_VALIDATOR)
+            .required(true)
+            .defaultValue("300000")
+            .build();
 
 
     private List<PropertyDescriptor> descriptors;
 
     private Set<Relationship> relationships;
-
 
 
     @Override
@@ -85,6 +97,7 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
 
 
         descriptors.add(JSON_PATH);
+        descriptors.add(LOCK_EXPIRATION);
 
         this.descriptors = Collections.unmodifiableList(descriptors);
 
@@ -105,74 +118,181 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
         return descriptors;
     }
 
+
     @Override
-    protected void handleLock(ProcessSession session, FlowFile flowFile, String tableName, String columnFamily, String columnQualifier, String lockId, String rowIdEncodingStrategy, byte[] lockId_bytes, Long timestamp, List<String> lock_ids) {
-        long delta =0;
-        List<IncrementFlowFile> increments = new ArrayList<>();
-        List<PutFlowFile> puts = new ArrayList<>();
-        for(String rowId:lock_ids){
-            getLogger().info("building lock for {}",new Object[]{rowId});
-            byte[] rowKeyBytes = getRow(rowId,rowIdEncodingStrategy);
-            IncrementColumn incrementColumn = new IncrementColumn(columnFamily.getBytes(StandardCharsets.UTF_8),
-                    columnQualifier.getBytes(StandardCharsets.UTF_8),1L);
-
-            IncrementFlowFile iff = new IncrementFlowFile(tableName,rowKeyBytes,Collections.singletonList(incrementColumn),flowFile);
-            increments.add(iff);
-
-
-            StringBuilder stringBuilder = new StringBuilder("{\"id\":\"")
-                    .append(lockId).append("\",\"timestamp\":")
-                    .append(timestamp).append("}");
-
-            PutColumn putColumn = new PutColumn(columnFamily.getBytes(StandardCharsets.UTF_8),
-                    lockId_bytes,stringBuilder.toString().getBytes(StandardCharsets.UTF_8));
-            getLogger().info("Created putColumn for {} {}",new Object[]{rowId,stringBuilder});
-            PutFlowFile pff = new PutFlowFile(tableName,rowKeyBytes,Collections.singletonList(putColumn),flowFile);
-            puts.add(pff);
+    public void onTrigger(final ProcessContext context, final ProcessSession session) throws ProcessException {
+        FlowFile flowFile = session.get();
+        if (flowFile == null) {
+            return;
         }
-        flowFile =session.putAttribute(flowFile,"multi_lock.locks.request",String.valueOf(increments.size()));
+        final String tableName = context.getProperty(TABLE_NAME).evaluateAttributeExpressions(flowFile).getValue();
+        final String columnFamily = context.getProperty(COLUMN_FAMILY).evaluateAttributeExpressions(flowFile).getValue();
+        final String columnQualifier = context.getProperty(COLUMN_QUALIFIER).evaluateAttributeExpressions(flowFile).getValue();
+        final String lockId = context.getProperty(LOCK_ID).evaluateAttributeExpressions(flowFile).getValue();
+        final String rowIdEncodingStrategy = context.getProperty(ROW_ID_ENCODING_STRATEGY).getValue();
+
+        final String jsonPath = context.getProperty(JSON_PATH).evaluateAttributeExpressions(flowFile).getValue();
+
+        final String timestampValue = context.getProperty(TIMESTAMP).evaluateAttributeExpressions(flowFile).getValue();
+
+        final byte[] lockId_bytes = lockId.getBytes(StandardCharsets.UTF_8);
+
+
+        final Long timestamp;
+        if (!StringUtils.isBlank(timestampValue)) {
+            try {
+                timestamp = Long.valueOf(timestampValue);
+            } catch (Exception e) {
+                getLogger().error("Invalid timestamp value: " + timestampValue, e);
+                throw new ProcessException(e);
+            }
+        } else {
+            timestamp = new Date().getTime();
+        }
+        final List<String> lock_ids = new ArrayList<>();
+        session.read(flowFile, in -> {
+            try (final InputStream bufferedIn = new BufferedInputStream(in)) {
+                List<String> locks = JsonPath.read(bufferedIn, jsonPath);
+                lock_ids.addAll(locks);
+            }
+        });
+
+        getLogger().info("Got {} locks ({})", new Object[]{lock_ids.size(), lock_ids});
         try {
-            Collection<IncrementColumnResult> results =clientService.increment(tableName,increments);
-            for(IncrementColumnResult icr:results){
-                delta+= icr.getValue();
-            }
-            getLogger().info("Increment result: {}",new Object[]{delta});
-            flowFile =session.putAttribute(flowFile,"multi_lock.locks.acquired",String.valueOf(delta));
 
-            if(delta != lock_ids.size()){
-                //invalid lock count, need to revert
-                revert(session, flowFile, tableName, increments);
-            }else{
-                //so now we have locks, we must place the job into the cell
-                try {
-                    clientService.put(tableName, puts);
-                    session.transfer(flowFile,REL_ACQUIRED);
-                } catch (IOException ex) {
-                    //we need to revert
-                    revert(session, flowFile, tableName, increments);
+            long delta = 0;
+            List<IncrementFlowFile> increments = new ArrayList<>();
+            List<PutFlowFile> puts = new ArrayList<>();
+            for (String rowId : lock_ids) {
+                getLogger().info("building lock for {}", new Object[]{rowId});
+                byte[] rowKeyBytes = getRow(rowId, rowIdEncodingStrategy);
+                IncrementColumn incrementColumn = new IncrementColumn(columnFamily.getBytes(StandardCharsets.UTF_8),
+                        columnQualifier.getBytes(StandardCharsets.UTF_8), 1L);
+
+                IncrementFlowFile iff = new IncrementFlowFile(tableName, rowKeyBytes, Collections.singletonList(incrementColumn), flowFile);
+                increments.add(iff);
+
+
+                StringBuilder stringBuilder = new StringBuilder("{\"id\":\"")
+                        .append(lockId).append("\",\"timestamp\":")
+                        .append(timestamp).append("}");
+
+                PutColumn putColumn = new PutColumn(columnFamily.getBytes(StandardCharsets.UTF_8),
+                        lockId_bytes, stringBuilder.toString().getBytes(StandardCharsets.UTF_8));
+                getLogger().info("Created putColumn for {} {}", new Object[]{rowId, stringBuilder});
+                PutFlowFile pff = new PutFlowFile(tableName, rowKeyBytes, Collections.singletonList(putColumn), flowFile);
+                puts.add(pff);
+            }
+            flowFile = session.putAttribute(flowFile, "multi_lock.locks.request", String.valueOf(increments.size()));
+            try {
+                Collection<IncrementColumnResult> results = clientService.increment(tableName, increments);
+                for (IncrementColumnResult icr : results) {
+                    delta += icr.getValue();
                 }
-            }
-        } catch (IOException e) {
-            getLogger().error("Error applying lock",e);
+                getLogger().info("Increment result: {}", new Object[]{delta});
+                flowFile = session.putAttribute(flowFile, "multi_lock.locks.acquired", String.valueOf(delta));
 
-            flowFile =session.putAttribute(flowFile,"multi_lock.exception",String.valueOf(e));
-            session.transfer(flowFile,REL_FAILURE);
+                if (delta != lock_ids.size()) {
+                    //invalid lock count, need to revert
+                    int released = revert(session, flowFile, tableName, increments, lock_ids, context);
+                    session.putAttribute(flowFile,"locks.released",String.valueOf(released));
+
+                } else {
+                    //so now we have locks, we must place the job into the cell
+                    try {
+                        clientService.put(tableName, puts);
+                        session.transfer(flowFile, REL_ACQUIRED);
+                    } catch (IOException ex) {
+                        //we need to revert
+                        int released = revert(session, flowFile, tableName, increments, lock_ids, context);
+                        session.putAttribute(flowFile,"locks.released",String.valueOf(released));
+                    }
+                }
+            } catch (IOException e) {
+                getLogger().error("Error applying lock", e);
+
+                flowFile = session.putAttribute(flowFile, "multi_lock.exception", String.valueOf(e));
+                session.transfer(flowFile, REL_FAILURE);
+            }
+        } catch (Exception ex) {
+            getLogger().error("Could not Acquire lock", ex);
+            session.transfer(flowFile, REL_FAILURE);
         }
+
     }
 
-    private void revert(ProcessSession session, FlowFile flowFile, String tableName, List<IncrementFlowFile> increments) throws IOException {
+    private int revert(ProcessSession session, FlowFile flowFile, String tableName, List<IncrementFlowFile> increments
+            , List<String> lock_ids, ProcessContext context) throws IOException {
 
         List<IncrementFlowFile> iccs = new ArrayList<>();
-        for(IncrementFlowFile iff:increments){
+        for (IncrementFlowFile iff : increments) {
             List<IncrementColumn> icl = new ArrayList<>();
-            for(IncrementColumn ic: iff.getColumns()) {
-                icl.add(new IncrementColumn(ic.getColumnFamily(),ic.getColumnQualifier(),-1L));
+            for (IncrementColumn ic : iff.getColumns()) {
+                icl.add(new IncrementColumn(ic.getColumnFamily(), ic.getColumnQualifier(), -1L));
 
             }
-        iccs.add(new IncrementFlowFile(iff.getTableName(),iff.getRow(),icl,iff.getFlowFile()));
+            iccs.add(new IncrementFlowFile(iff.getTableName(), iff.getRow(), icl, iff.getFlowFile()));
         }
-        getLogger().info("Reverting! ({})",new Object[]{increments.size()});
-        clientService.increment(tableName,iccs);
-        session.transfer(flowFile,REL_NOLOCK);
+        getLogger().info("Reverting! ({})", new Object[]{increments.size()});
+        clientService.increment(tableName, iccs);
+
+
+        final String expiredValue = context.getProperty(LOCK_EXPIRATION).evaluateAttributeExpressions(flowFile).getValue();
+        Long expiration = null;
+        if (!StringUtils.isBlank(expiredValue)) {
+            try {
+                expiration = Long.valueOf(expiredValue);
+            } catch (Exception e) {
+                getLogger().error("Invalid expired value: " + expiredValue, e);
+                throw new ProcessException(e);
+            }
+        }
+        int unlocked = 0;
+        //now release old
+        if (expiration != null)
+            unlocked = releaseExpiredLocks(flowFile, tableName, lock_ids, context, expiration);
+
+        session.transfer(flowFile, REL_NOLOCK);
+        return unlocked;
     }
+
+    private int releaseExpiredLocks(FlowFile flowFile, String tableName, List<String> lock_ids, ProcessContext context, Long expiration) throws IOException {
+
+        byte[] lockQualifier = context.getProperty(COLUMN_QUALIFIER).evaluateAttributeExpressions(flowFile).getValue().getBytes(StandardCharsets.UTF_8);
+        final AtomicInteger released = new AtomicInteger();
+        for (String lock : lock_ids
+                ) {
+            byte[] rowIdBytes = getRow(lock, context.getProperty(ROW_ID_ENCODING_STRATEGY).getValue());
+            byte[] columnFamily = context.getProperty(COLUMN_FAMILY).evaluateAttributeExpressions(flowFile).getValue().getBytes(StandardCharsets.UTF_8);
+            Long finalExpiration = expiration;
+            clientService.scan(tableName, rowIdBytes, rowIdBytes, Collections.emptyList(), new ResultHandler() {
+                @Override
+                public void handle(byte[] row, ResultCell[] resultCells) {
+                    for (ResultCell cell : resultCells) {
+                        if (cell.getQualifierArray().equals(lockQualifier) || !cell.getFamilyArray().equals(columnFamily))
+                            continue;
+                        //deal with it
+                        if (new Date().getTime() - cell.getTimestamp() > finalExpiration) {
+                            //now we need to delete
+                            try {
+                                if (clientService.checkAndDelete(tableName, cell.getRowArray(), cell.getFamilyArray(), cell.getQualifierArray(), cell.getValueArray(),
+                                        Collections.singleton(new DeleteColumn(cell.getFamilyArray(), cell.getQualifierArray())))) {
+                                    clientService.increment(tableName, cell.getRowArray(), Collections.singleton(new IncrementColumn(columnFamily, lockQualifier, -1L)));
+                                    getLogger().info("Removed expired lock for {} with lock {}",new Object[]{lock,new String(cell.getQualifierArray(),StandardCharsets.UTF_8)});
+                                    released.incrementAndGet();
+                                }
+                            } catch (IOException e)
+                            {
+                                getLogger().warn("Could not clean up expired locks",e);
+
+                            }
+                        }
+                    }
+                }
+            });
+
+        }
+        return released.get();
+    }
+
 }

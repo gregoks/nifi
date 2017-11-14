@@ -76,6 +76,7 @@ public class HBaseMultipleLockReleaseProcessor extends AbstractHBaseMultipleLock
         descriptors.add(HBASE_CLIENT_SERVICE);
         descriptors.add(TABLE_NAME);
         descriptors.add(COLUMN_FAMILY);
+        descriptors.add(COLUMN_QUALIFIER);
         descriptors.add(ROW_ID_ENCODING_STRATEGY);
         descriptors.add(LOCK_ID);
 
@@ -106,12 +107,13 @@ public class HBaseMultipleLockReleaseProcessor extends AbstractHBaseMultipleLock
         }
         final String tableName = context.getProperty(TABLE_NAME).evaluateAttributeExpressions(flowFile).getValue();
         final String columnFamily = context.getProperty(COLUMN_FAMILY).evaluateAttributeExpressions(flowFile).getValue();
+        final String columnQualifier = context.getProperty(COLUMN_QUALIFIER).evaluateAttributeExpressions(flowFile).getValue();
         final String lockId = context.getProperty(LOCK_ID).evaluateAttributeExpressions(flowFile).getValue();
         try {
 
             final AtomicInteger locks = new AtomicInteger();
             FlowFile finalFlowFile = flowFile;
-            clientService.scan(tableName, Collections.singletonList(new Column(columnFamily.getBytes(StandardCharsets.UTF_8),
+            clientService.scan(tableName, Collections.singleton(new Column(columnFamily.getBytes(StandardCharsets.UTF_8),
                             lockId.getBytes(StandardCharsets.UTF_8))), "QualifierFilter (=, '" + columnFamily + "':'" + lockId + "')"
 
                     , 0L, new ResultHandler() {
@@ -123,6 +125,11 @@ public class HBaseMultipleLockReleaseProcessor extends AbstractHBaseMultipleLock
                                     if(clientService.checkAndDelete(tableName,row,cell.getFamilyArray(),cell.getQualifierArray(),cell.getValueArray(),
                                             Collections.singleton(new DeleteColumn(cell.getFamilyArray(),cell.getQualifierArray())))){
                                         locks.incrementAndGet();
+                                        clientService.increment(tableName,row,Collections.singleton(new IncrementColumn(columnFamily.getBytes(StandardCharsets.UTF_8),
+                                                columnQualifier.getBytes(StandardCharsets.UTF_8),-1L)));
+
+
+
                                     }else{
                                         FlowFile ff = session.clone(finalFlowFile);
                                         ff =session.putAttribute(ff,"hbase.locks.failed",new String(cell.getRowArray(),StandardCharsets.UTF_8));
@@ -146,8 +153,4 @@ public class HBaseMultipleLockReleaseProcessor extends AbstractHBaseMultipleLock
 
     }
 
-    @Override
-    protected void handleLock(ProcessSession session, FlowFile flowFile, String tableName, String columnFamily, String columnQualifier, String lockId, String rowIdEncodingStrategy, byte[] lockId_bytes, Long timestamp, List<String> lock_ids) {
-
-    }
 }
