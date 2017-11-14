@@ -69,13 +69,11 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
             .build();
 
     protected static final PropertyDescriptor LOCK_EXPIRATION = new PropertyDescriptor.Builder()
-            .name("lock_expiration")
-            .displayName("Lock expiration")
+            .name("Lock expiration")
             .description("When set, releases expired locks on failure")
             .expressionLanguageSupported(true)
             .addValidator(StandardValidators.POSITIVE_LONG_VALIDATOR)
-            .required(true)
-            .defaultValue("300000")
+            .required(false)
             .build();
 
 
