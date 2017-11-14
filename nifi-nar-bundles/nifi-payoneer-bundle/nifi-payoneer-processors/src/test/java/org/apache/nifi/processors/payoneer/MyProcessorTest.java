@@ -16,6 +16,7 @@
  */
 package org.apache.nifi.processors.payoneer;
 
+import org.apache.nifi.hbase.HBaseMultipleLockProcessor;
 import org.apache.nifi.util.TestRunner;
 import org.apache.nifi.util.TestRunners;
 import org.junit.Before;
@@ -28,7 +29,7 @@ public class MyProcessorTest {
 
     @Before
     public void init() {
-        testRunner = TestRunners.newTestRunner(MyProcessor.class);
+        testRunner = TestRunners.newTestRunner(HBaseMultipleLockProcessor.class);
     }
 
     @Test

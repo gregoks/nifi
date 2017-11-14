@@ -22,14 +22,36 @@
         <version>1.4.0-PAYONEER</version>
     </parent>
 
-    <groupId>org.apache.nifi</groupId>
+
     <artifactId>nifi-payoneer-bundle</artifactId>
-    <version>1.4.0-PAYONEER</version>
+
     <packaging>pom</packaging>
 
     <modules>
         <module>nifi-payoneer-processors</module>
         <module>nifi-payoneer-nar</module>
     </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.apache.nifi</groupId>
+                <artifactId>nifi-payoneer-processors</artifactId>
+                <version>1.4.0-PAYONEER</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.hbase</groupId>
+                <artifactId>hbase-client</artifactId>
+                <version>${hbase.version}</version>
+            </dependency>
+            <!-- the top-level pom forces 18.0, but HBase 2.6 expects 12.0.1 -->
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>${hadoop.guava.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
 </project>
