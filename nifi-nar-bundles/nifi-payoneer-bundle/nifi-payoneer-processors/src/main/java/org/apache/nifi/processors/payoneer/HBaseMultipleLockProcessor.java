@@ -64,10 +64,7 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
             .description("A FlowFile is routed to this relationship if the service could not acquire all the locks")
             .build();
 
-    public static final Relationship REL_FAILURE = new Relationship.Builder()
-            .name("failure")
-            .description("A FlowFile is routed to this relationship if it cannot be sent to HBase")
-            .build();
+
 
     private List<PropertyDescriptor> descriptors;
 

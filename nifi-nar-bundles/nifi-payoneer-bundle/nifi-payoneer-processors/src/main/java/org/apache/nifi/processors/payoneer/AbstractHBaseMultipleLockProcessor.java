@@ -52,7 +52,10 @@ abstract class AbstractHBaseMultipleLockProcessor extends AbstractProcessor {
     static final String STRING_ENCODING_VALUE = "String";
     static final String BINARY_ENCODING_VALUE = "Binary";
 
-
+    public static final Relationship REL_FAILURE = new Relationship.Builder()
+            .name("failure")
+            .description("A FlowFile is routed to this relationship if it cannot be sent to HBase")
+            .build();
     protected static final AllowableValue ROW_ID_ENCODING_STRING = new AllowableValue(STRING_ENCODING_VALUE, STRING_ENCODING_VALUE,
             "Stores the value of row id as a UTF-8 String.");
     protected static final AllowableValue ROW_ID_ENCODING_BINARY = new AllowableValue(BINARY_ENCODING_VALUE, BINARY_ENCODING_VALUE,
@@ -187,8 +190,13 @@ abstract class AbstractHBaseMultipleLockProcessor extends AbstractProcessor {
         });
 
         getLogger().info("Got {} locks ({})",new Object[]{lock_ids.size(),lock_ids});
-
-        handleLock(session, flowFile, tableName, columnFamily, columnQualifier, lockId, rowIdEncodingStrategy, lockId_bytes, timestamp, lock_ids);
+try {
+    handleLock(session, flowFile, tableName, columnFamily, columnQualifier, lockId, rowIdEncodingStrategy, lockId_bytes, timestamp, lock_ids);
+}catch (Exception ex)
+{
+    getLogger().error("Could not Acquire lock", ex);
+    session.transfer(flowFile,REL_FAILURE);
+}
 
     }
 
