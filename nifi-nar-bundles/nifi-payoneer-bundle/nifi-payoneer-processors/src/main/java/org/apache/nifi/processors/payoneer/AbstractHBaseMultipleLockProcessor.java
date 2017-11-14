@@ -179,15 +179,14 @@ abstract class AbstractHBaseMultipleLockProcessor extends AbstractProcessor {
             timestamp = new Date().getTime();
         }
         final List<String> lock_ids = new ArrayList<>();
-        session.read(flowFile, new InputStreamCallback() {
-            @Override
-            public void process(final InputStream in) throws IOException {
-                try (final InputStream bufferedIn = new BufferedInputStream(in)) {
-                     List<String> locks = JsonPath.read(bufferedIn,jsonPath);
-                     lock_ids.addAll(locks);
-                }
+        session.read(flowFile, in -> {
+            try (final InputStream bufferedIn = new BufferedInputStream(in)) {
+                 List<String> locks = JsonPath.read(bufferedIn,jsonPath);
+                 lock_ids.addAll(locks);
             }
         });
+
+        getLogger().info("Got {} locks ({})",new Object[]{lock_ids.size(),lock_ids});
 
         handleLock(session, flowFile, tableName, columnFamily, columnQualifier, lockId, rowIdEncodingStrategy, lockId_bytes, timestamp, lock_ids);
 

@@ -113,6 +113,7 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
         List<IncrementFlowFile> increments = new ArrayList<>();
         List<PutFlowFile> puts = new ArrayList<>();
         for(String rowId:lock_ids){
+            getLogger().info("building lock for {}",new Object[]{rowId});
             byte[] rowKeyBytes = getRow(rowId,rowIdEncodingStrategy);
             IncrementColumn incrementColumn = new IncrementColumn(columnFamily.getBytes(StandardCharsets.UTF_8),
                     columnQualifier.getBytes(StandardCharsets.UTF_8),1L);
@@ -127,7 +128,7 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
 
             PutColumn putColumn = new PutColumn(columnFamily.getBytes(StandardCharsets.UTF_8),
                     lockId_bytes,stringBuilder.toString().getBytes(StandardCharsets.UTF_8));
-
+            getLogger().info("Created putColumn for {} {}",new Object[]{rowId,stringBuilder});
             PutFlowFile pff = new PutFlowFile(tableName,rowKeyBytes,Collections.singletonList(putColumn),flowFile);
             puts.add(pff);
         }
@@ -137,6 +138,7 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
             for(IncrementColumnResult icr:results){
                 delta+= icr.getValue();
             }
+            getLogger().info("Increment result: {}",new Object[]{delta});
             flowFile =session.putAttribute(flowFile,"multi_lock.locks.acquired",String.valueOf(delta));
 
             if(delta != lock_ids.size()){
@@ -171,7 +173,7 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
             }
         iccs.add(new IncrementFlowFile(iff.getTableName(),iff.getRow(),icl,iff.getFlowFile()));
         }
-
+        getLogger().info("Reverting! ({})",new Object[]{increments.size()});
         clientService.increment(tableName,iccs);
         session.transfer(flowFile,REL_NOLOCK);
     }
