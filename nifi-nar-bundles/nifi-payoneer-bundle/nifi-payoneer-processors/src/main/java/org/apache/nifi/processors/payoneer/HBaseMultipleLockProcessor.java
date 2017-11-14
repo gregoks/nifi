@@ -269,7 +269,7 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
                 @Override
                 public void handle(byte[] row, ResultCell[] resultCells) {
                     for (ResultCell cell : resultCells) {
-                        if (cell.getQualifierArray().equals(lockQualifier) || !cell.getFamilyArray().equals(columnFamily))
+                        if (Arrays.equals(cell.getQualifierArray(),lockQualifier) || !Arrays.equals(cell.getFamilyArray(),columnFamily))
                             continue;
                         //deal with it
                         if (new Date().getTime() - cell.getTimestamp() > finalExpiration) {
