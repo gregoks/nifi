@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package  org.apache.nifi.hbase;
+package  org.apache.nifi.processors.payoneer;
 
 import com.jayway.jsonpath.JsonPath;
 import org.apache.avro.util.Utf8;
