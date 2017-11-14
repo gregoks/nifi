@@ -76,6 +76,7 @@ public class HBaseMultipleLockReleaseProcessor extends AbstractHBaseMultipleLock
         descriptors.add(HBASE_CLIENT_SERVICE);
         descriptors.add(TABLE_NAME);
         descriptors.add(COLUMN_FAMILY);
+        descriptors.add(ROW_ID_ENCODING_STRATEGY);
         descriptors.add(LOCK_ID);
 
 

@@ -79,6 +79,7 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
         descriptors.add(TABLE_NAME);
         descriptors.add(COLUMN_FAMILY);
         descriptors.add(COLUMN_QUALIFIER);
+        descriptors.add(ROW_ID_ENCODING_STRATEGY);
         descriptors.add(TIMESTAMP);
         descriptors.add(LOCK_ID);
 

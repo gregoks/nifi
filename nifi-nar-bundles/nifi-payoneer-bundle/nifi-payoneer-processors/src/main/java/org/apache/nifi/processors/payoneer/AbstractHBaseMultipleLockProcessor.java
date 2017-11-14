@@ -62,7 +62,7 @@ abstract class AbstractHBaseMultipleLockProcessor extends AbstractProcessor {
             "Stores the value of the rows id as a binary byte array. It expects that the row id is a binary formatted string.");
 
 
-    static final PropertyDescriptor ROW_ID_ENCODING_STRATEGY = new PropertyDescriptor.Builder()
+    protected static final PropertyDescriptor ROW_ID_ENCODING_STRATEGY = new PropertyDescriptor.Builder()
             .name("Row Identifier Encoding Strategy")
             .description("Specifies the data type of Row ID used when inserting data into HBase. The default behavior is" +
                     " to convert the row id to a UTF-8 byte array. Choosing Binary will convert a binary formatted string" +
