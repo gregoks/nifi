@@ -282,10 +282,10 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
     }
 
     static String getQualifier(ResultCell cell){
-        return new String(cell.getQualifierArray(),cell.getQualifierOffset(),cell.getQualifierOffset()+cell.getQualifierLength(),StandardCharsets.UTF_8);
+        return new String(cell.getQualifierArray(),cell.getQualifierOffset(),cell.getQualifierLength(),StandardCharsets.UTF_8);
     }
     static String getFamily(ResultCell cell){
-        return new String(cell.getFamilyArray(),cell.getFamilyOffset(),cell.getFamilyOffset() + cell.getFamilyLength(),StandardCharsets.UTF_8);
+        return new String(cell.getFamilyArray(),cell.getFamilyOffset(), cell.getFamilyLength(),StandardCharsets.UTF_8);
     }
     static byte[] getValueBytes(ResultCell cell){
         return Arrays.copyOfRange(cell.getValueArray(),cell.getValueOffset(),cell.getValueOffset()+cell.getValueLength());
