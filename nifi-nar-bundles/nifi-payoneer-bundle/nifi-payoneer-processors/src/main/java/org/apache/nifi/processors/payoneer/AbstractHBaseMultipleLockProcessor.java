@@ -32,6 +32,7 @@ import org.apache.nifi.hbase.increment.IncrementColumnResult;
 import org.apache.nifi.hbase.increment.IncrementFlowFile;
 import org.apache.nifi.hbase.put.PutColumn;
 import org.apache.nifi.hbase.put.PutFlowFile;
+import org.apache.nifi.hbase.scan.ResultCell;
 import org.apache.nifi.json.JsonPathValidator;
 import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.ProcessException;
@@ -152,4 +153,22 @@ abstract class AbstractHBaseMultipleLockProcessor extends AbstractProcessor {
         return rowKeyBytes;
     }
 
+
+    static String getQualifier(ResultCell cell){
+        return new String(cell.getQualifierArray(),cell.getQualifierOffset(),cell.getQualifierLength(),StandardCharsets.UTF_8);
+    }
+    static String getFamily(ResultCell cell){
+        return new String(cell.getFamilyArray(),cell.getFamilyOffset(), cell.getFamilyLength(),StandardCharsets.UTF_8);
+    }
+    static byte[] getValueBytes(ResultCell cell){
+        return Arrays.copyOfRange(cell.getValueArray(),cell.getValueOffset(),cell.getValueOffset()+cell.getValueLength());
+    }
+
+    static byte[] getFamilyBytes(ResultCell cell){
+        return Arrays.copyOfRange(cell.getFamilyArray(),cell.getFamilyOffset(),cell.getFamilyOffset()+cell.getFamilyLength());
+    }
+
+    static byte[] getQualifierBytes(ResultCell cell){
+        return Arrays.copyOfRange(cell.getQualifierArray(),cell.getQualifierOffset(),cell.getQualifierOffset()+cell.getQualifierLength());
+    }
 }

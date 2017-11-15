@@ -122,8 +122,8 @@ public class HBaseMultipleLockReleaseProcessor extends AbstractHBaseMultipleLock
                             for (ResultCell cell:resultCells
                                  ) {
                                 try {
-                                    if(clientService.checkAndDelete(tableName,row,cell.getFamilyArray(),cell.getQualifierArray(),cell.getValueArray(),
-                                            Collections.singleton(new DeleteColumn(cell.getFamilyArray(),cell.getQualifierArray())))){
+                                    if(clientService.checkAndDelete(tableName,row,getFamilyBytes(cell) ,getQualifierBytes(cell),getValueBytes(cell),
+                                            Collections.singleton(new DeleteColumn(getFamilyBytes(cell),getQualifierBytes(cell))))){
                                         locks.incrementAndGet();
                                         clientService.increment(tableName,row,Collections.singleton(new IncrementColumn(columnFamily.getBytes(StandardCharsets.UTF_8),
                                                 columnQualifier.getBytes(StandardCharsets.UTF_8),-1L)));
