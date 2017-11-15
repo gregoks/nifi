@@ -281,6 +281,24 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
         }
     }
 
+    static String getQualifier(ResultCell cell){
+        return new String(cell.getQualifierArray(),cell.getQualifierOffset(),cell.getQualifierLength(),StandardCharsets.UTF_8);
+    }
+    static String getFamily(ResultCell cell){
+        return new String(cell.getFamilyArray(),cell.getFamilyOffset(),cell.getFamilyLength(),StandardCharsets.UTF_8);
+    }
+    static byte[] getValueBytes(ResultCell cell){
+        return Arrays.copyOfRange(cell.getValueArray(),cell.getValueOffset(),cell.getValueLength());
+    }
+
+    static byte[] getFamilyBytes(ResultCell cell){
+        return Arrays.copyOfRange(cell.getFamilyArray(),cell.getFamilyOffset(),cell.getFamilyLength());
+    }
+
+    static byte[] getQualifierBytes(ResultCell cell){
+        return Arrays.copyOfRange(cell.getQualifierArray(),cell.getQualifierOffset(),cell.getQualifierLength());
+    }
+
     private int releaseExpiredLocks(ProcessSession session, FlowFile flowFile, String tableName, List<String> lock_ids, ProcessContext context, Long expiration) throws IOException {
 
         InfoLogger logger = new InfoLogger();
@@ -289,7 +307,7 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
         for (String lock : lock_ids
                 ) {
             byte[] rowIdBytes = getRow(lock, context.getProperty(ROW_ID_ENCODING_STRATEGY).getValue());
-            byte[] columnFamily = context.getProperty(COLUMN_FAMILY).evaluateAttributeExpressions(flowFile).getValue().getBytes(StandardCharsets.UTF_8);
+            String columnFamily = context.getProperty(COLUMN_FAMILY).evaluateAttributeExpressions(flowFile).getValue();
             Long finalExpiration = expiration;
             final long cutoff = new Date().getTime();
             clientService.scan(tableName, rowIdBytes, rowIdBytes, Collections.emptyList(), new ResultHandler() {
@@ -297,21 +315,22 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
                 public void handle(byte[] row, ResultCell[] resultCells) {
                     logger.info("got {} cells for row {}",new Object[]{resultCells.length,lock});
                     for (ResultCell cell : resultCells) {
-                        logger.info("testing {}:{}",new Object[]{new String(cell.getFamilyArray(),StandardCharsets.UTF_8),new String(cell.getQualifierArray(),StandardCharsets.UTF_8)});
-                        if (Arrays.equals(cell.getQualifierArray(),lockQualifier) || !Arrays.equals(cell.getFamilyArray(),columnFamily))
+                        logger.info("testing {}:{}",new Object[]{getFamily(cell),getQualifier(cell)});
+                        if (Arrays.equals(cell.getQualifierArray(),lockQualifier) || !columnFamily.equals(getFamily(cell)))
                             continue;
                         //deal with it
                         logger.info("Date: {}, Timestamp {}, diff:{}",new Object[]{cutoff,cell.getTimestamp(),cutoff - cell.getTimestamp()});
                         if (cutoff - cell.getTimestamp() > finalExpiration) {
                             //now we need to delete
                             try {
-                                if (clientService.checkAndDelete(tableName, cell.getRowArray(), cell.getFamilyArray(), cell.getQualifierArray(), cell.getValueArray(),
+                                if (clientService.checkAndDelete(tableName, row,getFamilyBytes(cell) ,getQualifierBytes(cell),getValueBytes(cell),
                                         Collections.singleton(new DeleteColumn(cell.getFamilyArray(), cell.getQualifierArray())))) {
-                                    clientService.increment(tableName, cell.getRowArray(), Collections.singleton(new IncrementColumn(columnFamily, lockQualifier, -1L)));
-                                    logger.info("Removed expired lock for {} with lock {}",new Object[]{lock,new String(cell.getQualifierArray(),StandardCharsets.UTF_8)});
+                                    clientService.increment(tableName, cell.getRowArray(), Collections.singleton(new IncrementColumn(columnFamily.getBytes(StandardCharsets.UTF_8)
+                                            , lockQualifier, -1L)));
+                                    logger.info("Removed expired lock for {} with lock {}",new Object[]{lock,getQualifier(cell)});
                                     released.incrementAndGet();
                                 }else{
-                                    logger.info("check failed for lock {} cell {}:{}",new Object[]{lock,new String(cell.getFamilyArray(),StandardCharsets.UTF_8),new String(cell.getQualifierArray(),StandardCharsets.UTF_8)});
+                                    logger.info("check failed for lock {} cell {}:{}",new Object[]{lock,getFamily(cell),getQualifier(cell)});
                                 }
                             } catch (IOException e)
                             {
