@@ -325,7 +325,7 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
                             try {
                                 if (clientService.checkAndDelete(tableName, row,getFamilyBytes(cell) ,getQualifierBytes(cell),getValueBytes(cell),
                                         Collections.singleton(new DeleteColumn(getFamilyBytes(cell) ,getQualifierBytes(cell))))) {
-                                    clientService.increment(tableName, cell.getRowArray(), Collections.singleton(new IncrementColumn(columnFamily.getBytes(StandardCharsets.UTF_8)
+                                    clientService.increment(tableName, row, Collections.singleton(new IncrementColumn(columnFamily.getBytes(StandardCharsets.UTF_8)
                                             , lockQualifier, -1L)));
                                     logger.info("Removed expired lock for {} with lock {}",new Object[]{lock,getQualifier(cell)});
                                     released.incrementAndGet();
