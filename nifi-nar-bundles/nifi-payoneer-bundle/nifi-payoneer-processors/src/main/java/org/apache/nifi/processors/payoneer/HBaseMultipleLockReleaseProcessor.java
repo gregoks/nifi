@@ -114,7 +114,7 @@ public class HBaseMultipleLockReleaseProcessor extends AbstractHBaseMultipleLock
             final AtomicInteger locks = new AtomicInteger();
             FlowFile finalFlowFile = flowFile;
             clientService.scan(tableName, Collections.singleton(new Column(columnFamily.getBytes(StandardCharsets.UTF_8),
-                            lockId.getBytes(StandardCharsets.UTF_8))), "QualifierFilter (=, '" + columnFamily + "':'" + lockId + "')"
+                            lockId.getBytes(StandardCharsets.UTF_8))), "QualifierFilter (=, '" + columnFamily + ":" + lockId + "')"
 
                     , 0L, new ResultHandler() {
                         @Override
