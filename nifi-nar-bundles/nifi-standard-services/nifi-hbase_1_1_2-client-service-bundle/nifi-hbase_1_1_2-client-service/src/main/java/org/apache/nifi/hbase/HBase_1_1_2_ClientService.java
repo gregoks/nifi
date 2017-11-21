@@ -237,6 +237,7 @@ public class HBase_1_1_2_ClientService extends AbstractControllerService impleme
             ugi = SecurityUtil.loginKerberos(hbaseConfig, principal, keyTab);
             getLogger().info("Successfully logged in as principal {} with keytab {}", new Object[] {principal, keyTab});
 
+
             return ugi.doAs(new PrivilegedExceptionAction<Connection>() {
                 @Override
                 public Connection run() throws Exception {

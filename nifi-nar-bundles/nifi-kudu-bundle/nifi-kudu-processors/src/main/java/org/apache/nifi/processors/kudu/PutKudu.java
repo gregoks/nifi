@@ -53,6 +53,11 @@ public class PutKudu extends AbstractKudu {
     @Override
     protected List<PropertyDescriptor> getSupportedPropertyDescriptors() {
         final List<PropertyDescriptor> properties = new ArrayList<>();
+
+        properties.add(HADOOP_CONF_FILES);
+        properties.add(kerberosProperties.getKerberosPrincipal());
+        properties.add(kerberosProperties.getKerberosKeytab());
+
         properties.add(KUDU_MASTERS);
         properties.add(TABLE_NAME);
         properties.add(SKIP_HEAD_LINE);

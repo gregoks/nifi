@@ -18,22 +18,30 @@
 package org.apache.nifi.processors.kudu;
 
 import java.io.BufferedInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.kudu.WireProtocol;
 import org.apache.kudu.client.*;
 
 import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.annotation.lifecycle.OnStopped;
 import org.apache.nifi.components.PropertyDescriptor;
+import org.apache.nifi.components.ValidationContext;
+import org.apache.nifi.components.ValidationResult;
+import org.apache.nifi.controller.ConfigurationContext;
 import org.apache.nifi.flowfile.FlowFile;
 
-import org.apache.nifi.processor.AbstractProcessor;
-import org.apache.nifi.processor.ProcessContext;
-import org.apache.nifi.processor.ProcessSession;
-import org.apache.nifi.processor.Relationship;
+import org.apache.nifi.hadoop.KerberosProperties;
+import org.apache.nifi.hadoop.KerberosTicketRenewer;
+import org.apache.nifi.hadoop.SecurityUtil;
+import org.apache.nifi.processor.*;
 import org.apache.nifi.processor.exception.FlowFileAccessException;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
@@ -43,10 +51,10 @@ import org.apache.nifi.serialization.RecordReader;
 import org.apache.nifi.serialization.RecordReaderFactory;
 import org.apache.nifi.serialization.record.RecordSet;
 import org.apache.nifi.serialization.record.Record;
+import org.apache.nifi.util.hive.ValidationResources;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.security.PrivilegedExceptionAction;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -137,14 +145,82 @@ public abstract class AbstractKudu extends AbstractProcessor {
     protected KuduClient kuduClient;
     protected KuduTable kuduTable;
 
+    /*kerberos*/
+
+    PropertyDescriptor HADOOP_CONF_FILES = new PropertyDescriptor.Builder()
+            .name("Hadoop Configuration Files")
+            .description("Comma-separated list of Hadoop Configuration files," +
+                    " such as kudu-site.xml and core-site.xml for kerberos, " +
+                    "including full paths to the files.")
+            .addValidator(new ConfigFilesValidator())
+            .build();
+    static final long TICKET_RENEWAL_PERIOD = 60000;
+    private volatile UserGroupInformation ugi;
+    private volatile KerberosTicketRenewer renewer;
+    protected KerberosProperties kerberosProperties;
+    private volatile File kerberosConfigFile = null;
+
+    // Holder of cached Configuration information so validation does not reload the same config over and over
+    private final AtomicReference<ValidationResources> validationResourceHolder = new AtomicReference<>();
+
+    @Override
+    protected void init(ProcessorInitializationContext context) {
+        super.init(context);
+        kerberosConfigFile = context.getKerberosConfigurationFile();
+        kerberosProperties = getKerberosProperties(kerberosConfigFile);
+
+    }
+
+    protected KerberosProperties getKerberosProperties(File kerberosConfigFile) {
+        return new KerberosProperties(kerberosConfigFile);
+    }
+
+    @Override
+    protected Collection<ValidationResult> customValidate(ValidationContext validationContext) {
+        boolean confFileProvided = validationContext.getProperty(HADOOP_CONF_FILES).isSet();
+
+        final List<ValidationResult> problems = new ArrayList<>();
+        if (confFileProvided) {
+            final String configFiles = validationContext.getProperty(HADOOP_CONF_FILES).getValue();
+            ValidationResources resources = validationResourceHolder.get();
+
+            // if no resources in the holder, or if the holder has different resources loaded,
+            // then load the Configuration and set the new resources in the holder
+            if (resources == null || !configFiles.equals(resources.getConfigResources())) {
+                getLogger().debug("Reloading validation resources");
+                resources = new ValidationResources(configFiles, getConfigurationFromFiles(configFiles));
+                validationResourceHolder.set(resources);
+            }
+
+            final Configuration kuduConfig = resources.getConfiguration();
+            final String principal = validationContext.getProperty(kerberosProperties.getKerberosPrincipal()).evaluateAttributeExpressions().getValue();
+            final String keytab = validationContext.getProperty(kerberosProperties.getKerberosKeytab()).evaluateAttributeExpressions().getValue();
+
+            problems.addAll(KerberosProperties.validatePrincipalAndKeytab(
+                    this.getClass().getSimpleName(), kuduConfig, principal, keytab, getLogger()));
+        }
+        return problems;
+    }
+
+    protected Configuration getConfigurationFromFiles(final String configFiles) {
+        final Configuration kuduConfig = new Configuration();
+        if (StringUtils.isNotBlank(configFiles)) {
+            for (final String configFile : configFiles.split(",")) {
+                kuduConfig.addResource(new Path(configFile.trim()));
+            }
+        }
+        return kuduConfig;
+    }
+
+
     @OnScheduled
-    public void OnScheduled(final ProcessContext context) {
+    public void OnScheduled(final ProcessContext context) throws IOException, InterruptedException {
         try {
             tableName = context.getProperty(TABLE_NAME).evaluateAttributeExpressions().getValue();
             kuduMasters = context.getProperty(KUDU_MASTERS).evaluateAttributeExpressions().getValue();
             if (kuduClient == null) {
                 getLogger().debug("Setting up Kudu connection...");
-                kuduClient = getKuduConnection(kuduMasters);
+                kuduClient = getKuduConnection(context, kuduMasters);
                 kuduTable = this.getKuduTable(kuduClient, tableName);
                 getLogger().debug("Kudu connection successfully initialized");
             }
@@ -153,6 +229,13 @@ public abstract class AbstractKudu extends AbstractProcessor {
             batchSize = context.getProperty(BATCH_SIZE).evaluateAttributeExpressions().asInteger();
             flushMode = SessionConfiguration.FlushMode.valueOf(context.getProperty(FLUSH_MODE).getValue());
             skipHeadLine = context.getProperty(SKIP_HEAD_LINE).asBoolean();
+
+
+            // if we got here then we have a successful connection, so if we have a ugi then start a renewer
+            if (ugi != null) {
+                final String id = getClass().getSimpleName();
+                renewer = SecurityUtil.startTicketRenewalThread(id, ugi, TICKET_RENEWAL_PERIOD, getLogger());
+            }
         } catch (KuduException ex) {
             getLogger().error("Exception occurred while interacting with Kudu due to " + ex.getMessage(), ex);
         }
@@ -336,8 +419,32 @@ public abstract class AbstractKudu extends AbstractProcessor {
         }
     }
 
-    protected KuduClient getKuduConnection(String masters) {
-        return new KuduClient.KuduClientBuilder(kuduMasters).build();
+    protected KuduClient getKuduConnection(ProcessContext context, String kuduMasters) throws IOException, InterruptedException {
+        final String configFiles = context.getProperty(HADOOP_CONF_FILES).getValue();
+        final Configuration kuduConfig = getConfigurationFromFiles(configFiles);
+
+
+        if (SecurityUtil.isSecurityEnabled(kuduConfig)) {
+            final String principal = context.getProperty(kerberosProperties.getKerberosPrincipal()).evaluateAttributeExpressions().getValue();
+            final String keyTab = context.getProperty(kerberosProperties.getKerberosKeytab()).evaluateAttributeExpressions().getValue();
+
+            getLogger().info("Kudu Security Enabled, logging in as principal {} with keytab {}", new Object[] {principal, keyTab});
+            ugi = SecurityUtil.loginKerberos(kuduConfig, principal, keyTab);
+            getLogger().info("Successfully logged in as principal {} with keytab {}", new Object[] {principal, keyTab});
+
+            return ugi.doAs(new PrivilegedExceptionAction<KuduClient>() {
+                @Override
+                public KuduClient run() throws Exception {
+                    return new KuduClient.KuduClientBuilder(kuduMasters)
+                            .build();
+                }
+            });
+
+        } else {
+            return new KuduClient.KuduClientBuilder(kuduMasters)
+                    .build();
+        }
+
     }
 
     protected KuduTable getKuduTable(KuduClient client, String tableName) throws KuduException {
