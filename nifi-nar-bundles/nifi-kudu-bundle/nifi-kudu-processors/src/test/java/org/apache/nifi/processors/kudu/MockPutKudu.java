@@ -24,8 +24,10 @@ import org.apache.kudu.client.KuduException;
 import org.apache.kudu.client.Insert;
 import org.apache.kudu.client.Upsert;
 
+import org.apache.nifi.processor.ProcessContext;
 import org.apache.nifi.serialization.record.Record;
 
+import java.io.IOException;
 import java.util.List;
 
 import static org.mockito.Mockito.mock;
@@ -42,7 +44,8 @@ public class MockPutKudu extends PutKudu{
   }
 
   @Override
-  protected KuduClient getKuduConnection(String masters) {
+
+  protected KuduClient getKuduConnection(ProcessContext context, String kuduMasters) throws IOException, InterruptedException {
     return mock(KuduClient.class);
   }
 

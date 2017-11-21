@@ -432,13 +432,8 @@ public abstract class AbstractKudu extends AbstractProcessor {
             ugi = SecurityUtil.loginKerberos(kuduConfig, principal, keyTab);
             getLogger().info("Successfully logged in as principal {} with keytab {}", new Object[] {principal, keyTab});
 
-            return ugi.doAs(new PrivilegedExceptionAction<KuduClient>() {
-                @Override
-                public KuduClient run() throws Exception {
-                    return new KuduClient.KuduClientBuilder(kuduMasters)
-                            .build();
-                }
-            });
+            return ugi.doAs((PrivilegedExceptionAction<KuduClient>)
+                    () -> new KuduClient.KuduClientBuilder(kuduMasters).build());
 
         } else {
             return new KuduClient.KuduClientBuilder(kuduMasters)
