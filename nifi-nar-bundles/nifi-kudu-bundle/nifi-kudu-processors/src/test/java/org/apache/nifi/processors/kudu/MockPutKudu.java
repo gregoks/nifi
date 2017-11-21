@@ -44,7 +44,6 @@ public class MockPutKudu extends PutKudu{
   }
 
   @Override
-
   protected KuduClient getKuduConnection(ProcessContext context, String kuduMasters) throws IOException, InterruptedException {
     return mock(KuduClient.class);
   }
