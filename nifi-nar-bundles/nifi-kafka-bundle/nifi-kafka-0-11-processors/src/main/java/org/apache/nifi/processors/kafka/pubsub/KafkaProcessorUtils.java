@@ -295,9 +295,9 @@ final class KafkaProcessorUtils {
      * @param context Context
      */
     private static void setJaasConfig(Map<String, Object> mapToPopulate, ProcessContext context) {
-        String keytab = context.getProperty(USER_KEYTAB).getValue();
-        String principal = context.getProperty(USER_PRINCIPAL).getValue();
-        String serviceName = context.getProperty(KERBEROS_PRINCIPLE).getValue();
+        String keytab = context.getProperty(USER_KEYTAB).evaluateAttributeExpressions().getValue();
+        String principal = context.getProperty(USER_PRINCIPAL).evaluateAttributeExpressions().getValue();
+        String serviceName = context.getProperty(KERBEROS_PRINCIPLE).evaluateAttributeExpressions().getValue();
         if(StringUtils.isNotBlank(keytab) && StringUtils.isNotBlank(principal) && StringUtils.isNotBlank(serviceName)) {
             mapToPopulate.put(SaslConfigs.SASL_JAAS_CONFIG, "com.sun.security.auth.module.Krb5LoginModule required "
                     + "useTicketCache=false "
