@@ -94,7 +94,7 @@ final class KafkaProcessorUtils {
                     + "It is ignored unless one of the SASL options of the <Security Protocol> are selected.")
             .required(false)
             .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
-            .expressionLanguageSupported(false)
+            .expressionLanguageSupported(true)
             .build();
     static final PropertyDescriptor USER_PRINCIPAL = new PropertyDescriptor.Builder()
             .name("sasl.kerberos.principal")
@@ -103,7 +103,7 @@ final class KafkaProcessorUtils {
                     + "in the JVM properties defined in the bootstrap.conf file. This principal will be set into 'sasl.jaas.config' Kafka's property.")
             .required(false)
             .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
-            .expressionLanguageSupported(false)
+            .expressionLanguageSupported(true)
             .build();
     static final PropertyDescriptor USER_KEYTAB = new PropertyDescriptor.Builder()
             .name("sasl.kerberos.keytab")
@@ -112,7 +112,7 @@ final class KafkaProcessorUtils {
                     + "in the JVM properties defined in the bootstrap.conf file. This principal will be set into 'sasl.jaas.config' Kafka's property.")
             .required(false)
             .addValidator(StandardValidators.FILE_EXISTS_VALIDATOR)
-            .expressionLanguageSupported(false)
+            .expressionLanguageSupported(true)
             .build();
     static final PropertyDescriptor SSL_CONTEXT_SERVICE = new PropertyDescriptor.Builder()
             .name("ssl.context.service")
@@ -298,6 +298,7 @@ final class KafkaProcessorUtils {
         String keytab = context.getProperty(USER_KEYTAB).evaluateAttributeExpressions().getValue();
         String principal = context.getProperty(USER_PRINCIPAL).evaluateAttributeExpressions().getValue();
         String serviceName = context.getProperty(KERBEROS_PRINCIPLE).evaluateAttributeExpressions().getValue();
+
         if(StringUtils.isNotBlank(keytab) && StringUtils.isNotBlank(principal) && StringUtils.isNotBlank(serviceName)) {
             mapToPopulate.put(SaslConfigs.SASL_JAAS_CONFIG, "com.sun.security.auth.module.Krb5LoginModule required "
                     + "useTicketCache=false "
