@@ -51,7 +51,6 @@ import org.apache.nifi.serialization.RecordReader;
 import org.apache.nifi.serialization.RecordReaderFactory;
 import org.apache.nifi.serialization.record.RecordSet;
 import org.apache.nifi.serialization.record.Record;
-import org.apache.nifi.util.hive.ValidationResources;
 
 import java.security.PrivilegedExceptionAction;
 import java.util.*;

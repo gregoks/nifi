@@ -95,11 +95,6 @@
             <artifactId>hadoop-common</artifactId>
             <version>2.7.3</version>
         </dependency>
-        <dependency>
-            <groupId>org.apache.nifi</groupId>
-            <artifactId>nifi-hive-processors</artifactId>
-            <version>1.4.0-PAYONEER</version>
-            <scope>provided</scope>
-        </dependency>
+
     </dependencies>
 </project>
