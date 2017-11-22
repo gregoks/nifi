@@ -14,3 +14,4 @@
 # limitations under the License.
 org.apache.nifi.processors.payoneer.HBaseMultipleLockProcessor
 org.apache.nifi.processors.payoneer.HBaseMultipleLockReleaseProcessor
+org.apache.nifi.processors.payoneer.AmazonMwsSigningProcessor
