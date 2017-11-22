@@ -294,12 +294,14 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
     private static String sign(String data, String secretKey)
             throws NoSuchAlgorithmException, InvalidKeyException,
             IllegalStateException, UnsupportedEncodingException {
+
         Mac mac = Mac.getInstance(ALGORITHM);
         mac.init(new SecretKeySpec(secretKey.getBytes(CHARACTER_ENCODING),
                 ALGORITHM));
         byte[] signature = mac.doFinal(data.getBytes(CHARACTER_ENCODING));
         String signatureBase64 = new String(Base64.encodeBase64(signature),
                 CHARACTER_ENCODING);
+
         return new String(signatureBase64);
     }
 
