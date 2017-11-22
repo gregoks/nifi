@@ -48,7 +48,7 @@
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-record-serialization-services</artifactId>
             <version>1.4.0-PAYONEER</version>
-            <scope>provided</scope>
+
         </dependency>
 
         <dependency>
