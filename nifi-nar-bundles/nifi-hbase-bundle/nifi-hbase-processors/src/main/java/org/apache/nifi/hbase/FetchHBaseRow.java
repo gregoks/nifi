@@ -33,6 +33,7 @@ import org.apache.nifi.hbase.io.RowSerializer;
 import org.apache.nifi.hbase.scan.Column;
 import org.apache.nifi.hbase.scan.ResultCell;
 import org.apache.nifi.hbase.scan.ResultHandler;
+import org.apache.nifi.hbase.util.RowSerializerUtil;
 import org.apache.nifi.processor.AbstractProcessor;
 import org.apache.nifi.processor.ProcessContext;
 import org.apache.nifi.processor.ProcessSession;
@@ -50,6 +51,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+
+import static org.apache.nifi.processor.util.StandardValidators.NON_BLANK_VALIDATOR;
 
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @Tags({"hbase", "scan", "fetch", "get", "enrich"})
@@ -205,11 +208,25 @@ public class FetchHBaseRow extends AbstractProcessor {
         return properties;
     }
 
+
     @Override
+    protected PropertyDescriptor getSupportedDynamicPropertyDescriptor(String propertyDescriptorName) {
+        return new PropertyDescriptor.Builder()
+                .name(propertyDescriptorName)
+                .description("Sets the attribute name to the Column name Expression extracted from the data")
+                .dynamic(true)
+                .required(false)
+                .expressionLanguageSupported(false)
+                .addValidator(NON_BLANK_VALIDATOR)
+                .build();
+    }
+    @Override
+
     public Set<Relationship> getRelationships() {
         return relationships;
     }
 
+    AttributeMapper mapper;
     @OnScheduled
     public void onScheduled(ProcessContext context) {
         this.decodeCharset = Charset.forName(context.getProperty(DECODE_CHARSET).getValue());
@@ -223,6 +240,7 @@ public class FetchHBaseRow extends AbstractProcessor {
             this.regularRowSerializer = new JsonQualifierAndValueRowSerializer(decodeCharset, encodeCharset);
             this.base64RowSerializer = new JsonQualifierAndValueRowSerializer(decodeCharset, encodeCharset, true);
         }
+        this.mapper = new AttributeMapper(decodeCharset,context);
     }
 
     @Override
@@ -254,7 +272,7 @@ public class FetchHBaseRow extends AbstractProcessor {
         final RowSerializer rowSerializer = base64Encode ? base64RowSerializer : regularRowSerializer;
 
         final FetchHBaseRowHandler handler = destination.equals(DESTINATION_CONTENT.getValue())
-                ? new FlowFileContentHandler(flowFile, session, rowSerializer) : new FlowFileAttributeHandler(flowFile, session, rowSerializer);
+                ? new FlowFileContentHandler(flowFile, session, rowSerializer) : new FlowFileAttributeHandler(flowFile, session, rowSerializer, mapper);
 
         final byte[] rowIdBytes = rowId.getBytes(StandardCharsets.UTF_8);
 
@@ -371,6 +389,39 @@ public class FetchHBaseRow extends AbstractProcessor {
         }
     }
 
+
+    static class AttributeMapper{
+        final Charset charset;
+        final Map<String,String> mapper = new HashMap<>();
+
+        AttributeMapper(Charset charset,ProcessContext context) {
+            this.charset = charset;
+
+            for (PropertyDescriptor prop :
+                    context.getProperties().keySet()) {
+                if (!prop.isDynamic()) continue;
+                mapper.put(prop.getName(),context.getProperty(prop).getValue());
+            }
+        }
+
+        FlowFile mapAttributes(FlowFile flowFile,ProcessSession session,ResultCell[] resultCells){
+            Map<String,String> maps = new HashMap<>();
+            for(ResultCell cell: resultCells){
+                maps.put(RowSerializerUtil.getCellFamily(cell,charset,false) +":"
+                        + RowSerializerUtil.getCellQualifier(cell,charset,false),
+                        RowSerializerUtil.getCellValue(cell,charset,false));
+            }
+            for (Map.Entry<String,String> entry :
+                    mapper.entrySet()) {
+                String val = maps.get(entry.getValue());
+                if(val == null) continue;
+                flowFile = session.putAttribute(flowFile,entry.getKey(),val);
+            }
+            return flowFile;
+        }
+
+    }
+
     /**
      * A FetchHBaseRowHandler that writes the resulting row to FlowFile attributes.
      */
@@ -380,17 +431,24 @@ public class FetchHBaseRow extends AbstractProcessor {
         private final ProcessSession session;
         private final RowSerializer rowSerializer;
         private boolean handledRow = false;
+        private final AttributeMapper mapper;
 
-        public FlowFileAttributeHandler(final FlowFile flowFile, final ProcessSession session, final RowSerializer serializer) {
+        public FlowFileAttributeHandler(final FlowFile flowFile, final ProcessSession session, final RowSerializer serializer, AttributeMapper mapper) {
             this.flowFile = flowFile;
             this.session = session;
             this.rowSerializer = serializer;
+            this.mapper = mapper;
         }
 
         @Override
         public void handle(byte[] row, ResultCell[] resultCells) {
+
             final String serializedRow = rowSerializer.serialize(row, resultCells);
             flowFile = session.putAttribute(flowFile, HBASE_ROW_ATTR, serializedRow);
+            if(mapper != null)
+            mapper.mapAttributes(flowFile,session,resultCells);
+
+
             handledRow = true;
         }
 
