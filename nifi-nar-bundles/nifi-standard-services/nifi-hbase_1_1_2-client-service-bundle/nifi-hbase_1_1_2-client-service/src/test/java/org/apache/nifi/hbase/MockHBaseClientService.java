@@ -208,6 +208,26 @@ public class MockHBaseClientService extends HBase_1_1_2_ClientService {
     }
 
     @Override
+    public boolean checkAndPut(String tableName, byte[] rowId, byte[] family, byte[] qualifier, byte[] value, Collection<PutColumn> columns) throws IOException {
+        for (Result result : results) {
+            if (Arrays.equals(result.getRow(), rowId)) {
+                Cell[] cellArray = result.rawCells();
+                for (Cell cell : cellArray) {
+                    if (Arrays.equals(cell.getFamilyArray(), family) && Arrays.equals(cell.getQualifierArray(), qualifier)) {
+                        if (value == null || Arrays.equals(cell.getValueArray(), value)) {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+
+
+        put(tableName, rowId, columns);
+        return true;
+    }
+
+    @Override
     public boolean checkAndDelete(String tableName, byte[] rowId, byte[] family, byte[] qualifier, byte[] value,Collection<DeleteColumn> deletes) throws IOException {
 
         for (Result result : results) {

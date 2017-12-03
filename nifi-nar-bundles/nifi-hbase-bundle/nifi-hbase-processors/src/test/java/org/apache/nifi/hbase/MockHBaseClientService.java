@@ -92,6 +92,10 @@ public class MockHBaseClientService extends AbstractControllerService implements
         throw new UnsupportedOperationException();
     }
 
+    @Override
+    public boolean checkAndPut(String tableName, byte[] rowId, byte[] family, byte[] qualifier, byte[] value, Collection<PutColumn> columns) throws IOException {
+        throw new UnsupportedOperationException();
+    }
 
     @Override
     public boolean checkAndDelete(String tableName, byte[] rowId, byte[] family, byte[] qualifier, byte[] value,Collection<DeleteColumn> deletes) throws IOException {
