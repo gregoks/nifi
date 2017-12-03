@@ -6,6 +6,7 @@ import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.components.PropertyDescriptor;
+import org.apache.nifi.expression.AttributeExpression;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.hbase.HBaseClientService;
 import org.apache.nifi.processor.*;
@@ -32,7 +33,7 @@ import static org.apache.nifi.processor.util.StandardValidators.NON_BLANK_VALIDA
 @EventDriven
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @Tags({"amazon", "mws","signature"})
-@CapabilityDescription("Manages a distributed lock of multiple items")
+@CapabilityDescription("Generates a signed url for use with Amazon MWS")
 public class AmazonMwsSigningProcessor extends AbstractProcessor {
     public static final Relationship REL_FAILURE = new Relationship.Builder()
             .name("failure")
@@ -114,6 +115,16 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
             .addValidator(StandardValidators.ATTRIBUTE_KEY_VALIDATOR)
             .build();
 
+    public static final PropertyDescriptor PROP_METHOD = new PropertyDescriptor.Builder()
+            .name("HTTP Method")
+            .description("HTTP request method (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS). Arbitrary methods are also supported. "
+                    + "Methods other than POST, PUT and PATCH will be sent without a message body.")
+            .required(true)
+            .defaultValue("POST")
+            .expressionLanguageSupported(true)
+            .addValidator(StandardValidators.createAttributeExpressionLanguageValidator(AttributeExpression.ResultType.STRING))
+            .build();
+
 
     final TimeZone tz = TimeZone.getTimeZone("UTC");
     final DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm'Z'"); // Quoted "Z" to indicate UTC, no timezone offset
@@ -126,6 +137,7 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
 
         descriptors.add(SECRET_KEY);
         descriptors.add(SERVICE_URL);
+        descriptors.add(PROP_METHOD);
         descriptors.add(ACTION);
         descriptors.add(AUTH_TOKEN);
         descriptors.add(SELLER_ID);
@@ -182,6 +194,7 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
         final String seller_id= context.getProperty(SELLER_ID).evaluateAttributeExpressions(flowFile).getValue();
         final String access_key= context.getProperty(ACCESS_KEY).evaluateAttributeExpressions(flowFile).getValue();
         final String output_attribute= context.getProperty(OUTPUT_ATTRIBUTE).evaluateAttributeExpressions(flowFile).getValue();
+        final String method= context.getProperty(PROP_METHOD).evaluateAttributeExpressions(flowFile).getValue();
 
         // Create set of parameters needed and store in a map
         HashMap<String, String> parameters = new HashMap<String,String>();
@@ -209,14 +222,14 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
         // (without the signature parameter)
         String formattedParameters = null;
         try {
-            formattedParameters = calculateStringToSignV2(parameters,
+            formattedParameters = calculateStringToSignV2(method,parameters,
                     serviceUrl);
 
         String signature = sign(formattedParameters, secretKey);
 
         // Add signature to the parameters and display final results
         parameters.put("Signature", urlEncode(signature));
-        String signedUrl = calculateStringToSignV2(parameters,serviceUrl);
+        String signedUrl = calculateStringToSignV2(method,parameters,serviceUrl);
         flowFile = session.putAttribute(flowFile,output_attribute,signedUrl);
         session.transfer(flowFile,REL_SUCCESS);
 
@@ -250,7 +263,7 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
         *       by the '&' character (ASCII code 38).
         *
         */
-    private static String calculateStringToSignV2(
+    private static String calculateStringToSignV2(String method,
             Map<String, String> parameters, String serviceUrl)
             throws SignatureException, URISyntaxException {
         // Sort the parameters alphabetically by storing
@@ -263,7 +276,7 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
 
         // Create flattened (String) representation
         StringBuilder data = new StringBuilder();
-        data.append("POST\n");
+        data.append(method).append("\n");
         data.append(endpoint.getHost());
         data.append("\n/");
         data.append("\n");
