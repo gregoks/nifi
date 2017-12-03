@@ -169,63 +169,45 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
         try {
 
             long delta = 0;
-            List<IncrementFlowFile> increments = new ArrayList<>();
-            List<PutFlowFile> puts = new ArrayList<>();
+            List<String> locked = new ArrayList<>();
             for (String rowId : lock_ids) {
                 getLogger().info("building lock for {}", new Object[]{rowId});
                 byte[] rowKeyBytes = getRow(rowId, rowIdEncodingStrategy);
-                IncrementColumn incrementColumn = new IncrementColumn(columnFamily.getBytes(StandardCharsets.UTF_8),
-                        columnQualifier.getBytes(StandardCharsets.UTF_8), 1L);
-
-                IncrementFlowFile iff = new IncrementFlowFile(tableName, rowKeyBytes, Collections.singletonList(incrementColumn), flowFile);
-                increments.add(iff);
 
 
-                StringBuilder stringBuilder = new StringBuilder("{\"id\":\"")
-                        .append(lockId).append("\",\"timestamp\":")
-                        .append(timestamp).append("}");
+                PutColumn putColumn = new PutColumn(columnFamily.getBytes(StandardCharsets.UTF_8),columnQualifier.getBytes(StandardCharsets.UTF_8),
+                        lockId_bytes);
 
-                PutColumn putColumn = new PutColumn(columnFamily.getBytes(StandardCharsets.UTF_8),
-                        lockId_bytes, stringBuilder.toString().getBytes(StandardCharsets.UTF_8));
-                getLogger().info("Created putColumn for {} {}", new Object[]{rowId, stringBuilder});
-                PutFlowFile pff = new PutFlowFile(tableName, rowKeyBytes, Collections.singletonList(putColumn), flowFile);
-                puts.add(pff);
-            }
-            flowFile = session.putAttribute(flowFile, "multi_lock.locks.request", String.valueOf(increments.size()));
-            try {
-                Collection<IncrementColumnResult> results = clientService.increment(tableName, increments);
-                for (IncrementColumnResult icr : results) {
-                    delta += icr.getValue();
-                }
-                getLogger().info("Increment result: {}", new Object[]{delta});
-                flowFile = session.putAttribute(flowFile, "multi_lock.locks.acquired", String.valueOf(delta));
-
-                if (delta != lock_ids.size()) {
-                    //invalid lock count, need to revert
-                    revert(session, flowFile, tableName, increments, lock_ids, context);
+                if(clientService.checkAndPut(tableName,rowKeyBytes,columnFamily.getBytes(StandardCharsets.UTF_8),
+                        columnQualifier.getBytes(StandardCharsets.UTF_8),null,putColumn)){
+                    locked.add(rowId);
+                }else{
+                    for (String unlockId : locked) {
+                        getLogger().info("building unlock for {}", new Object[]{unlockId});
+                        byte[] unlockKeyBytes = getRow(rowId, rowIdEncodingStrategy);
 
 
-                } else {
-                    //so now we have locks, we must place the job into the cell
-                    try {
-                        clientService.put(tableName, puts);
-                        session.transfer(flowFile, REL_ACQUIRED);
-                    } catch (IOException ex) {
-                        //we need to revert
-                         revert(session, flowFile, tableName, increments, lock_ids, context);
+                        DeleteColumn delColumn = new DeleteColumn(columnFamily.getBytes(StandardCharsets.UTF_8),columnQualifier.getBytes(StandardCharsets.UTF_8));
+
+                        clientService.checkAndDelete(tableName,unlockKeyBytes,columnFamily.getBytes(StandardCharsets.UTF_8),
+                                columnQualifier.getBytes(StandardCharsets.UTF_8),lockId_bytes,Collections.singleton(delColumn));
+
 
                     }
+                    session.transfer(flowFile, REL_FAILURE);
+                    break;
                 }
-            } catch (IOException e) {
-                getLogger().error("Error applying lock", e);
-
-                flowFile = session.putAttribute(flowFile, "multi_lock.exception", String.valueOf(e));
-                session.transfer(flowFile, REL_FAILURE);
             }
+            session.transfer(flowFile, REL_ACQUIRED);
+
         } catch (Exception ex) {
             getLogger().error("Could not Acquire lock", ex);
             session.transfer(flowFile, REL_FAILURE);
         }
+
+    }
+
+    private void unlock(List<String> locked,String rowIdEncodingStrategy) {
 
     }
 

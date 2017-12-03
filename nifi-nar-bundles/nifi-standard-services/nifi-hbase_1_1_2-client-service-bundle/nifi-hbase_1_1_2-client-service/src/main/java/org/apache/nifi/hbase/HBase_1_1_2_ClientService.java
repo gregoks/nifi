@@ -423,6 +423,19 @@ public class HBase_1_1_2_ClientService extends AbstractControllerService impleme
     }
 
     @Override
+    public boolean checkAndPut(final String tableName, final byte[] rowId, final byte[] family, final byte[] qualifier, final byte[] value, final Collection<PutColumn> columns) throws IOException {
+        try (final Table table = connection.getTable(TableName.valueOf(tableName))) {
+            Put put = new Put(rowId);
+            for(PutColumn column:columns)
+                put.addColumn(
+                        column.getColumnFamily(),
+                        column.getColumnQualifier(),
+                        column.getBuffer());
+            return table.checkAndPut(rowId, family, qualifier, value, put);
+        }
+    }
+
+    @Override
     public boolean checkAndDelete(String tableName, byte[] rowId, byte[] family, byte[] qualifier, byte[] value, Collection<DeleteColumn> deletes) throws IOException {
         try (final Table table = connection.getTable(TableName.valueOf(tableName))) {
            Delete delete = new Delete(rowId);

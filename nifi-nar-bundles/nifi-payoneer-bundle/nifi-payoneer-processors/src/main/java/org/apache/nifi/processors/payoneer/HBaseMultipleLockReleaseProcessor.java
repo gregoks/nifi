@@ -114,7 +114,7 @@ public class HBaseMultipleLockReleaseProcessor extends AbstractHBaseMultipleLock
             final AtomicInteger locks = new AtomicInteger();
             FlowFile finalFlowFile = flowFile;
             clientService.scan(tableName, Collections.singleton(new Column(columnFamily.getBytes(StandardCharsets.UTF_8),
-                            lockId.getBytes(StandardCharsets.UTF_8))), "FamilyFilter(=,'binary:" +columnFamily + "') AND QualifierFilter(=, 'binary:" + lockId + "')"
+                            lockId.getBytes(StandardCharsets.UTF_8))), "SingleColumnValueFilter('"+columnFamily + "','"+columnQualifier+"',=,'binary:"+lockId +"',false,false)"
 
                     , 0L, new ResultHandler() {
                         @Override
@@ -125,15 +125,8 @@ public class HBaseMultipleLockReleaseProcessor extends AbstractHBaseMultipleLock
                                     if(clientService.checkAndDelete(tableName,row,getFamilyBytes(cell) ,getQualifierBytes(cell),getValueBytes(cell),
                                             Collections.singleton(new DeleteColumn(getFamilyBytes(cell),getQualifierBytes(cell))))){
                                         locks.incrementAndGet();
-                                        clientService.increment(tableName,row,Collections.singleton(new IncrementColumn(columnFamily.getBytes(StandardCharsets.UTF_8),
-                                                columnQualifier.getBytes(StandardCharsets.UTF_8),-1L)));
 
 
-
-                                    }else{
-                                        FlowFile ff = session.clone(finalFlowFile);
-                                        ff =session.putAttribute(ff,"hbase.locks.failed",new String(cell.getRowArray(),StandardCharsets.UTF_8));
-                                        session.transfer(ff,REL_FAILURE);
                                     }
                                 } catch (IOException e) {
                                     getLogger().error("failed to delete job {} from {}",new Object[]{lockId, new String(cell.getRowArray())},e);
