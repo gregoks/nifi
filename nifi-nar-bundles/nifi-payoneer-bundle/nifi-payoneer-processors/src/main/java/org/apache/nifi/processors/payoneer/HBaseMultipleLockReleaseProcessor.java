@@ -20,6 +20,7 @@ import com.jayway.jsonpath.JsonPath;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.nifi.annotation.behavior.EventDriven;
 import org.apache.nifi.annotation.behavior.InputRequirement;
+import org.apache.nifi.annotation.behavior.WritesAttribute;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.annotation.lifecycle.OnScheduled;
@@ -51,6 +52,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 @EventDriven
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @Tags({"hadoop", "hbase","unlock"})
+@WritesAttribute(attribute="hbase.locks.released",description = "the total number of locks released")
 @CapabilityDescription("Releases a distributed lock of multiple items")
 public class HBaseMultipleLockReleaseProcessor extends AbstractHBaseMultipleLockProcessor {
 
@@ -138,7 +140,7 @@ public class HBaseMultipleLockReleaseProcessor extends AbstractHBaseMultipleLock
 
                         }
                     });
-                flowFile = session.putAttribute(flowFile,"hbase.locks.success",String.valueOf(locks.get()));
+                flowFile = session.putAttribute(flowFile,"hbase.locks.released",String.valueOf(locks.get()));
                 session.transfer(flowFile,REL_SUCCESS);
         } catch (IOException e) {
             e.printStackTrace();

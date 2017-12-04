@@ -1043,6 +1043,12 @@
             </dependency>
             <dependency>
                 <groupId>org.apache.nifi</groupId>
+                <artifactId>nifi-payoneer-nar</artifactId>
+                <version>1.4.0-PAYONEER</version>
+                <type>nar</type>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.nifi</groupId>
                 <artifactId>nifi-mongodb-services-nar</artifactId>
                 <version>1.4.0-PAYONEER</version>
                 <type>nar</type>

@@ -59,6 +59,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 @EventDriven
 @InputRequirement(InputRequirement.Requirement.INPUT_REQUIRED)
 @Tags({"hadoop", "hbase","lock"})
+@WritesAttribute(attribute="hbase.locks.acquired",description = "the total number of locks acquired")
 @CapabilityDescription("Manages a distributed lock of multiple items")
 public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcessor {
 
@@ -142,6 +143,16 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
         final String jsonPath = context.getProperty(JSON_PATH).evaluateAttributeExpressions(flowFile).getValue();
 
         final String timestampValue = context.getProperty(TIMESTAMP).evaluateAttributeExpressions(flowFile).getValue();
+        final String expiredValue = context.getProperty(LOCK_EXPIRATION).evaluateAttributeExpressions(flowFile).getValue();
+        Long expiration = null;
+        if (!StringUtils.isBlank(expiredValue)) {
+            try {
+                expiration = Long.valueOf(expiredValue);
+            } catch (Exception e) {
+                getLogger().error("Invalid expired value: " + expiredValue, e);
+                throw new ProcessException(e);
+            }
+        }
 
         final byte[] lockId_bytes = lockId.getBytes(StandardCharsets.UTF_8);
 
@@ -155,8 +166,9 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
                 throw new ProcessException(e);
             }
         } else {
-            timestamp = new Date().getTime();
+            timestamp = null;//new Date().getTime();
         }
+
         final List<String> lock_ids = new ArrayList<>();
         session.read(flowFile, in -> {
             try (final InputStream bufferedIn = new BufferedInputStream(in)) {
@@ -170,34 +182,36 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
 
             long delta = 0;
             List<String> locked = new ArrayList<>();
+            final AtomicInteger locks = new AtomicInteger();
             for (String rowId : lock_ids) {
                 getLogger().info("building lock for {}", new Object[]{rowId});
                 byte[] rowKeyBytes = getRow(rowId, rowIdEncodingStrategy);
 
 
                 PutColumn putColumn = new PutColumn(columnFamily.getBytes(StandardCharsets.UTF_8),columnQualifier.getBytes(StandardCharsets.UTF_8),
-                        lockId_bytes);
+                        lockId_bytes,timestamp);
 
+                //check if no lock held on the column and set the lock to our lockid (jobid)
                 if(clientService.checkAndPut(tableName,rowKeyBytes,columnFamily.getBytes(StandardCharsets.UTF_8),
                         columnQualifier.getBytes(StandardCharsets.UTF_8),null,putColumn)){
+
                     locked.add(rowId);
+                    locks.incrementAndGet();
                 }else{
-                    for (String unlockId : locked) {
-                        getLogger().info("building unlock for {}", new Object[]{unlockId});
-                        byte[] unlockKeyBytes = getRow(rowId, rowIdEncodingStrategy);
+                    //if we could not acquire this lock, first revert all achieved locks
+                    release(tableName, columnFamily, columnQualifier, rowIdEncodingStrategy, lockId_bytes, locked, rowId);
 
-
-                        DeleteColumn delColumn = new DeleteColumn(columnFamily.getBytes(StandardCharsets.UTF_8),columnQualifier.getBytes(StandardCharsets.UTF_8));
-
-                        clientService.checkAndDelete(tableName,unlockKeyBytes,columnFamily.getBytes(StandardCharsets.UTF_8),
-                                columnQualifier.getBytes(StandardCharsets.UTF_8),lockId_bytes,Collections.singleton(delColumn));
-
-
+                    //
+                    if (expiration != null) {
+                        releaseExpiredLocks(session,flowFile, tableName, lock_ids, context, expiration);
                     }
-                    session.transfer(flowFile, REL_FAILURE);
+
+
+                    session.transfer(flowFile, REL_NOLOCK);
                     break;
                 }
             }
+            flowFile = session.putAttribute(flowFile,"hbase.locks.acquired",String.valueOf(locks.get()));
             session.transfer(flowFile, REL_ACQUIRED);
 
         } catch (Exception ex) {
@@ -207,46 +221,24 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
 
     }
 
-    private void unlock(List<String> locked,String rowIdEncodingStrategy) {
+
+    private void release(String tableName, String columnFamily, String columnQualifier, String rowIdEncodingStrategy, byte[] lockId_bytes, List<String> locked, String rowId) throws IOException {
+        for (String unlockId : locked) {
+            getLogger().info("building unlock for {}", new Object[]{unlockId});
+            byte[] unlockKeyBytes = getRow(rowId, rowIdEncodingStrategy);
+
+
+            DeleteColumn delColumn = new DeleteColumn(columnFamily.getBytes(StandardCharsets.UTF_8),columnQualifier.getBytes(StandardCharsets.UTF_8));
+
+            clientService.checkAndDelete(tableName,unlockKeyBytes,columnFamily.getBytes(StandardCharsets.UTF_8),
+                    columnQualifier.getBytes(StandardCharsets.UTF_8),lockId_bytes, Collections.singleton(delColumn));
+
+
+        }
 
     }
 
-    private int revert(ProcessSession session, FlowFile flowFile, String tableName, List<IncrementFlowFile> increments
-            , List<String> lock_ids, ProcessContext context) throws IOException {
 
-        List<IncrementFlowFile> iccs = new ArrayList<>();
-        for (IncrementFlowFile iff : increments) {
-            List<IncrementColumn> icl = new ArrayList<>();
-            for (IncrementColumn ic : iff.getColumns()) {
-                icl.add(new IncrementColumn(ic.getColumnFamily(), ic.getColumnQualifier(), -1L));
-
-            }
-            iccs.add(new IncrementFlowFile(iff.getTableName(), iff.getRow(), icl, iff.getFlowFile()));
-        }
-        getLogger().info("Reverting! ({})", new Object[]{increments.size()});
-        clientService.increment(tableName, iccs);
-
-
-        final String expiredValue = context.getProperty(LOCK_EXPIRATION).evaluateAttributeExpressions(flowFile).getValue();
-        Long expiration = null;
-        if (!StringUtils.isBlank(expiredValue)) {
-            try {
-                expiration = Long.valueOf(expiredValue);
-            } catch (Exception e) {
-                getLogger().error("Invalid expired value: " + expiredValue, e);
-                throw new ProcessException(e);
-            }
-        }
-        int unlocked = 0;
-        //now release old
-        if (expiration != null) {
-            unlocked = releaseExpiredLocks(session,flowFile, tableName, lock_ids, context, expiration);
-            session.putAttribute(flowFile,"locks.released",String.valueOf(unlocked));
-        }
-
-        session.transfer(flowFile, REL_NOLOCK);
-        return unlocked;
-    }
 
     class InfoLogger {
         final StringBuilder sb = new StringBuilder();
@@ -281,8 +273,8 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
                     logger.info("got {} cells for row {}",new Object[]{resultCells.length,lock});
                     for (ResultCell cell : resultCells) {
                         logger.info("testing {}:{}",new Object[]{getFamily(cell),getQualifier(cell)});
-                        if (Arrays.equals(cell.getQualifierArray(),lockQualifier) || !columnFamily.equals(getFamily(cell)))
-                            continue;
+
+
                         //deal with it
                         logger.info("Date: {}, Timestamp {}, diff:{}",new Object[]{cutoff,cell.getTimestamp(),cutoff - cell.getTimestamp()});
                         if (cutoff - cell.getTimestamp() > finalExpiration) {
@@ -290,8 +282,6 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
                             try {
                                 if (clientService.checkAndDelete(tableName, row,getFamilyBytes(cell) ,getQualifierBytes(cell),getValueBytes(cell),
                                         Collections.singleton(new DeleteColumn(getFamilyBytes(cell) ,getQualifierBytes(cell))))) {
-                                    clientService.increment(tableName, row, Collections.singleton(new IncrementColumn(columnFamily.getBytes(StandardCharsets.UTF_8)
-                                            , lockQualifier, -1L)));
                                     logger.info("Removed expired lock for {} with lock {}",new Object[]{lock,getQualifier(cell)});
                                     released.incrementAndGet();
                                 }else{
@@ -311,6 +301,7 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
         }
 
         FlowFile lff = session.create(flowFile);
+        lff = session.putAttribute(lff,"hbase.locks.released",String.valueOf(released.get()));
         session.write(lff, out -> out.write(logger.toString().getBytes(StandardCharsets.UTF_8)));
         session.transfer(lff,REL_UNNLOCK_LOG);
 
