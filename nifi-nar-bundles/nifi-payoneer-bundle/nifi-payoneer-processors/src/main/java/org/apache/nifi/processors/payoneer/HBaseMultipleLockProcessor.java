@@ -208,7 +208,7 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
 
 
                     session.transfer(flowFile, REL_NOLOCK);
-                    break;
+                    return;
                 }
             }
             flowFile = session.putAttribute(flowFile,"hbase.locks.acquired",String.valueOf(locks.get()));
