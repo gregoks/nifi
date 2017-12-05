@@ -115,28 +115,32 @@ public class HBaseMultipleLockReleaseProcessor extends AbstractHBaseMultipleLock
 
             final AtomicInteger locks = new AtomicInteger();
             FlowFile finalFlowFile = flowFile;
-            clientService.scan(tableName, Collections.singleton(new Column(columnFamily.getBytes(StandardCharsets.UTF_8),
-                            lockId.getBytes(StandardCharsets.UTF_8))), "SingleColumnValueFilter('"+columnFamily + "','"+columnQualifier+"',=,'binary:"+lockId +"',false,false)"
+
+            byte[] familyBytes = columnFamily.getBytes(StandardCharsets.UTF_8);
+            byte[] qualifierBytes = columnQualifier.getBytes(StandardCharsets.UTF_8);
+            clientService.scan(tableName, Collections.singleton(new Column(familyBytes,qualifierBytes)),
+                    "SingleColumnValueFilter('"+columnFamily + "','"+columnQualifier+"',=,'binary:"+lockId +"',false,false)"
 
                     , 0L, new ResultHandler() {
                         @Override
                         public void handle(byte[] row, ResultCell[] resultCells) {
-                            for (ResultCell cell:resultCells
-                                 ) {
-                                try {
-                                    if(clientService.checkAndDelete(tableName,row,getFamilyBytes(cell) ,getQualifierBytes(cell),getValueBytes(cell),
-                                            Collections.singleton(new DeleteColumn(getFamilyBytes(cell),getQualifierBytes(cell))))){
-                                        locks.incrementAndGet();
+
+                            try {
+                                if(clientService.checkAndDelete(tableName,row,familyBytes ,
+                                        qualifierBytes,
+                                        lockId.getBytes(StandardCharsets.UTF_8),
+                                        Collections.singleton(new DeleteColumn(familyBytes,qualifierBytes)))){
+                                    locks.incrementAndGet();
 
 
-                                    }
-                                } catch (IOException e) {
-                                    getLogger().error("failed to delete job {} from {}",new Object[]{lockId, new String(cell.getRowArray())},e);
-                                    FlowFile ff = session.clone(finalFlowFile);
-                                    ff =session.putAttribute(ff,"hbase.locks.exception",String.valueOf(e));
-                                    session.transfer(ff,REL_FAILURE);
                                 }
+                            } catch (IOException e) {
+                                getLogger().error("failed to delete job {} from {}",new Object[]{lockId, new String(row)},e);
+                                FlowFile ff = session.clone(finalFlowFile);
+                                ff =session.putAttribute(ff,"hbase.locks.exception",String.valueOf(e));
+                                session.transfer(ff,REL_FAILURE);
                             }
+
 
                         }
                     });
