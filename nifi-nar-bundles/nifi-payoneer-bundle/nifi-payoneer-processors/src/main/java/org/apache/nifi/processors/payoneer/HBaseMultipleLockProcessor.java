@@ -271,6 +271,7 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
                 @Override
                 public void handle(byte[] row, ResultCell[] resultCells) {
                     logger.info("got {} cells for row {}",new Object[]{resultCells.length,lock});
+
                     for (ResultCell cell : resultCells) {
                         logger.info("testing {}:{}",new Object[]{getFamily(cell),getQualifier(cell)});
 
@@ -282,7 +283,7 @@ public class HBaseMultipleLockProcessor extends AbstractHBaseMultipleLockProcess
                             try {
                                 if (clientService.checkAndDelete(tableName, row,getFamilyBytes(cell) ,getQualifierBytes(cell),getValueBytes(cell),
                                         Collections.singleton(new DeleteColumn(getFamilyBytes(cell) ,getQualifierBytes(cell))))) {
-                                    logger.info("Removed expired lock for {} with lock {}",new Object[]{lock,getQualifier(cell)});
+                                    logger.info("Removed expired lock for {} with lock {}",new Object[]{lock,new String(getValueBytes(cell),StandardCharsets.UTF_8)});
                                     released.incrementAndGet();
                                 }else{
                                     logger.info("check failed for lock {} cell {}:{}",new Object[]{lock,getFamily(cell),getQualifier(cell)});

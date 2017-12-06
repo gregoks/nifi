@@ -109,7 +109,15 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
 
     protected static final PropertyDescriptor OUTPUT_ATTRIBUTE = new PropertyDescriptor.Builder()
             .name("Output attribute")
-            .description("The attribute to store the result to")
+            .description("The attribute to store the signature result to")
+            .required(true)
+            .expressionLanguageSupported(true)
+            .addValidator(StandardValidators.ATTRIBUTE_KEY_VALIDATOR)
+            .build();
+
+    protected static final PropertyDescriptor OUTPUT_URL_ATTRIBUTE = new PropertyDescriptor.Builder()
+            .name("Output URL attribute")
+            .description("The attribute to store the full url result to")
             .required(true)
             .expressionLanguageSupported(true)
             .addValidator(StandardValidators.ATTRIBUTE_KEY_VALIDATOR)
@@ -143,6 +151,8 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
         descriptors.add(SELLER_ID);
         descriptors.add(ACCESS_KEY);
         descriptors.add(OUTPUT_ATTRIBUTE);
+
+        descriptors.add(OUTPUT_URL_ATTRIBUTE);
 
 
         this.descriptors = Collections.unmodifiableList(descriptors);
@@ -194,6 +204,8 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
         final String seller_id= context.getProperty(SELLER_ID).evaluateAttributeExpressions(flowFile).getValue();
         final String access_key= context.getProperty(ACCESS_KEY).evaluateAttributeExpressions(flowFile).getValue();
         final String output_attribute= context.getProperty(OUTPUT_ATTRIBUTE).evaluateAttributeExpressions(flowFile).getValue();
+        final String output_url_attribute= context.getProperty(OUTPUT_URL_ATTRIBUTE).evaluateAttributeExpressions(flowFile).getValue();
+
         final String method= context.getProperty(PROP_METHOD).evaluateAttributeExpressions(flowFile).getValue();
 
         // Create set of parameters needed and store in a map
@@ -229,8 +241,12 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
 
         // Add signature to the parameters and display final results
         parameters.put("Signature", urlEncode(signature));
-        String signedUrl = calculateStringToSignV2(method,parameters,serviceUrl);
-        flowFile = session.putAttribute(flowFile,output_attribute,signedUrl);
+            flowFile = session.putAttribute(flowFile,output_attribute,urlEncode(signature));
+
+
+
+        String signedUrl = generateUrl(parameters,serviceUrl);
+        flowFile = session.putAttribute(flowFile,output_url_attribute,signedUrl);
         session.transfer(flowFile,REL_SUCCESS);
 
 
@@ -266,10 +282,6 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
     private static String calculateStringToSignV2(String method,
             Map<String, String> parameters, String serviceUrl)
             throws SignatureException, URISyntaxException {
-        // Sort the parameters alphabetically by storing
-        // in TreeMap structure
-        Map<String, String> sorted = new TreeMap<String, String>();
-        sorted.putAll(parameters);
 
         // Set endpoint value
         URI endpoint = new URI(serviceUrl.toLowerCase());
@@ -278,13 +290,34 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
         StringBuilder data = new StringBuilder();
         data.append(method).append("\n");
         data.append(endpoint.getHost());
-        data.append("\n/");
+        //data.append("\n/");
+        data.append("\n" + endpoint.getPath()) ;
         data.append("\n");
+        return buildQueryString(parameters, data);
+
+
+    }
+    private static String generateUrl(Map<String, String> parameters, String serviceUrl)
+            throws SignatureException, URISyntaxException {
+
+        // Set endpoint value
+        URI endpoint = new URI(serviceUrl.toLowerCase());
+        // Create flattened (String) representation
+        StringBuilder data = new StringBuilder("https://" + endpoint.getHost() +"/" + endpoint.getPath() +"?");
+        return buildQueryString(parameters, data);
+
+    }
+
+    private static String buildQueryString(Map<String, String> parameters, StringBuilder data) {
+        // Sort the parameters alphabetically by storing
+        // in TreeMap structure
+        Map<String, String> sorted = new TreeMap<String, String>();
+        sorted.putAll(parameters);
 
         Iterator<Entry<String, String>> pairs =
                 sorted.entrySet().iterator();
         while (pairs.hasNext()) {
-            Map.Entry<String, String> pair = pairs.next();
+            Entry<String, String> pair = pairs.next();
             if (pair.getValue() != null) {
                 data.append( pair.getKey() + "=" + pair.getValue());
             }
