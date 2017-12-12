@@ -157,6 +157,8 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
         descriptors.add(SERVICE_URL);
         descriptors.add(PROP_METHOD);
         descriptors.add(ACTION);
+        descriptors.add(VERSION);
+
         descriptors.add(AUTH_TOKEN);
         descriptors.add(SELLER_ID);
         descriptors.add(ACCESS_KEY);
