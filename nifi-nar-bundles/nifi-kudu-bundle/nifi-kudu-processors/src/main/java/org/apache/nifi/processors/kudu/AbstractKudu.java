@@ -135,14 +135,14 @@ public abstract class AbstractKudu extends AbstractProcessor {
     public static final String RECORD_COUNT_ATTR = "record.count";
 
     protected String kuduMasters;
-    protected String tableName;
+
     protected boolean skipHeadLine;
     protected OperationType operationType;
     protected SessionConfiguration.FlushMode flushMode;
     protected int batchSize = 100;
 
     protected KuduClient kuduClient;
-    protected KuduTable kuduTable;
+
 
     /*kerberos*/
 
@@ -215,12 +215,12 @@ public abstract class AbstractKudu extends AbstractProcessor {
     @OnScheduled
     public void OnScheduled(final ProcessContext context) throws IOException, InterruptedException {
         try {
-            tableName = context.getProperty(TABLE_NAME).evaluateAttributeExpressions().getValue();
+
             kuduMasters = context.getProperty(KUDU_MASTERS).evaluateAttributeExpressions().getValue();
             if (kuduClient == null) {
                 getLogger().debug("Setting up Kudu connection...");
                 kuduClient = getKuduConnection(context, kuduMasters);
-                kuduTable = this.getKuduTable(kuduClient, tableName);
+
                 getLogger().debug("Kudu connection successfully initialized");
             }
 
@@ -329,6 +329,8 @@ public abstract class AbstractKudu extends AbstractProcessor {
             final AtomicReference<Throwable> exceptionHolder = new AtomicReference<>(null);
             final RecordReaderFactory recordReaderFactory = context.getProperty(RECORD_READER).asControllerService(RecordReaderFactory.class);
             final KuduSession finalKuduSession = kuduSession = this.getKuduSession(kuduClient);
+            String  tableName = context.getProperty(TABLE_NAME).evaluateAttributeExpressions(flowFile).getValue();
+            KuduTable kuduTable = this.getKuduTable(kuduClient, tableName);
             session.read(flowFile, (final InputStream rawIn) -> {
                 RecordReader recordReader = null;
                 try (final BufferedInputStream in = new BufferedInputStream(rawIn)) {
@@ -422,6 +424,7 @@ public abstract class AbstractKudu extends AbstractProcessor {
         final String configFiles = context.getProperty(HADOOP_CONF_FILES).getValue();
         final Configuration kuduConfig = getConfigurationFromFiles(configFiles);
 
+        tables.clear(); //reset tables on new client
 
         if (SecurityUtil.isSecurityEnabled(kuduConfig)) {
             final String principal = context.getProperty(kerberosProperties.getKerberosPrincipal()).evaluateAttributeExpressions().getValue();
@@ -441,8 +444,19 @@ public abstract class AbstractKudu extends AbstractProcessor {
 
     }
 
+    Map<String,KuduTable> tables = new HashMap<>();
+
     protected KuduTable getKuduTable(KuduClient client, String tableName) throws KuduException {
-        return client.openTable(tableName);
+        synchronized (tables){
+            KuduTable table = tables.get(tableName);
+            if(table == null)
+            {
+                table =client.openTable(tableName);
+                tables.put(tableName,table);
+            }
+            return table;
+        }
+
     }
 
     protected KuduSession getKuduSession(KuduClient client) {
