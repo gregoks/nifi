@@ -22,6 +22,7 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.regex.Pattern;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.apache.commons.codec.binary.Base64;
@@ -96,6 +97,15 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
             .required(true)
             .expressionLanguageSupported(true)
             .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+            .build();
+
+    protected static final PropertyDescriptor VERSION = new PropertyDescriptor.Builder()
+            .name("Version")
+            .description("The API Call version")
+            .required(true)
+            .defaultValue("2009-01-01")
+            .expressionLanguageSupported(true)
+            .addValidator(StandardValidators.createRegexMatchingValidator(Pattern.compile("2[0-9]{3}(-[0-9]{2}){2}") ))
             .build();
 
     protected static final PropertyDescriptor SELLER_ID = new PropertyDescriptor.Builder()
@@ -205,7 +215,7 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
         final String access_key= context.getProperty(ACCESS_KEY).evaluateAttributeExpressions(flowFile).getValue();
         final String output_attribute= context.getProperty(OUTPUT_ATTRIBUTE).evaluateAttributeExpressions(flowFile).getValue();
         final String output_url_attribute= context.getProperty(OUTPUT_URL_ATTRIBUTE).evaluateAttributeExpressions(flowFile).getValue();
-
+final String version = context.getProperty(VERSION).evaluateAttributeExpressions(flowFile).getValue();
         final String method= context.getProperty(PROP_METHOD).evaluateAttributeExpressions(flowFile).getValue();
 
         // Create set of parameters needed and store in a map
@@ -222,7 +232,7 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
         parameters.put("SignatureVersion", urlEncode("2"));
 
         parameters.put("Timestamp", urlEncode(df.format(new Date())));
-        parameters.put("Version", urlEncode("2009-01-01"));
+        parameters.put("Version", urlEncode(version));
 
         for(Map.Entry<PropertyDescriptor,String> entry : context.getProperties().entrySet()) {
             if (!entry.getKey().isDynamic()) continue;
