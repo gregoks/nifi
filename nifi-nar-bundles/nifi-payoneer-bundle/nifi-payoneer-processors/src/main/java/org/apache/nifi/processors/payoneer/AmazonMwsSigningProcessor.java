@@ -145,7 +145,7 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
 
 
     final TimeZone tz = TimeZone.getTimeZone("UTC");
-    final DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm'Z'"); // Quoted "Z" to indicate UTC, no timezone offset
+    final DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'"); // Quoted "Z" to indicate UTC, no timezone offset
 
     @Override
     protected void init(final ProcessorInitializationContext context) {
