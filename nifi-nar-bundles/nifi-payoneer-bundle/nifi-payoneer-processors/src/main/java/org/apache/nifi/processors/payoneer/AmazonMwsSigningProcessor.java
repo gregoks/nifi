@@ -54,6 +54,15 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
     private static final String CHARACTER_ENCODING = "UTF-8";
     final static String ALGORITHM = "HmacSHA256";
 
+    protected static final PropertyDescriptor API_SECTION = new PropertyDescriptor.Builder()
+            .name("API Section")
+            .description("The api section name")
+            .required(true)
+            .expressionLanguageSupported(true)
+            .sensitive(true)
+            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+            .build();
+
     protected static final PropertyDescriptor SECRET_KEY = new PropertyDescriptor.Builder()
             .name("Secret Key")
             .description("The amazon API secret key")
@@ -153,6 +162,7 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
         df.setTimeZone(tz);
         final List<PropertyDescriptor> descriptors = new ArrayList<PropertyDescriptor>();
 
+        descriptors.add(API_SECTION);
         descriptors.add(SECRET_KEY);
         descriptors.add(SERVICE_URL);
         descriptors.add(PROP_METHOD);
@@ -210,6 +220,7 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
         final String secretKey = context.getProperty(SECRET_KEY).evaluateAttributeExpressions(flowFile).getValue();
 
         // Use the endpoint for your marketplace
+        final String apiSectionName = context.getProperty(API_SECTION).evaluateAttributeExpressions(flowFile).getValue();
         final String serviceUrl = context.getProperty(SERVICE_URL).evaluateAttributeExpressions(flowFile).getValue();
         final String action = context.getProperty(ACTION).evaluateAttributeExpressions(flowFile).getValue();
         final String auth_token = context.getProperty(AUTH_TOKEN).evaluateAttributeExpressions(flowFile).getValue();
@@ -217,7 +228,7 @@ public class AmazonMwsSigningProcessor extends AbstractProcessor {
         final String access_key= context.getProperty(ACCESS_KEY).evaluateAttributeExpressions(flowFile).getValue();
         final String output_attribute= context.getProperty(OUTPUT_ATTRIBUTE).evaluateAttributeExpressions(flowFile).getValue();
         final String output_url_attribute= context.getProperty(OUTPUT_URL_ATTRIBUTE).evaluateAttributeExpressions(flowFile).getValue();
-final String version = context.getProperty(VERSION).evaluateAttributeExpressions(flowFile).getValue();
+        final String version = context.getProperty(VERSION).evaluateAttributeExpressions(flowFile).getValue();
         final String method= context.getProperty(PROP_METHOD).evaluateAttributeExpressions(flowFile).getValue();
 
         // Create set of parameters needed and store in a map
@@ -246,20 +257,18 @@ final String version = context.getProperty(VERSION).evaluateAttributeExpressions
         // (without the signature parameter)
         String formattedParameters = null;
         try {
-            formattedParameters = calculateStringToSignV2(method,parameters,
-                    serviceUrl);
+            formattedParameters = calculateStringToSignV2(method,parameters,serviceUrl, apiSectionName, version);
 
-        String signature = sign(formattedParameters, secretKey);
+            String signature = sign(formattedParameters, secretKey);
 
-        // Add signature to the parameters and display final results
-        parameters.put("Signature", urlEncode(signature));
+            // Add signature to the parameters and display final results
+            parameters.put("Signature", urlEncode(signature));
             flowFile = session.putAttribute(flowFile,output_attribute,urlEncode(signature));
 
+            String signedUrl = generateUrl(parameters,serviceUrl, apiSectionName, version);
 
-
-        String signedUrl = generateUrl(parameters,serviceUrl);
-        flowFile = session.putAttribute(flowFile,output_url_attribute,signedUrl);
-        session.transfer(flowFile,REL_SUCCESS);
+            flowFile = session.putAttribute(flowFile,output_url_attribute,signedUrl);
+            session.transfer(flowFile,REL_SUCCESS);
 
 
 
@@ -292,7 +301,7 @@ final String version = context.getProperty(VERSION).evaluateAttributeExpressions
         *
         */
     private static String calculateStringToSignV2(String method,
-            Map<String, String> parameters, String serviceUrl)
+                                                  Map<String, String> parameters, String serviceUrl, String apiSection, String apiVersion)
             throws SignatureException, URISyntaxException {
 
         // Set endpoint value
@@ -302,20 +311,19 @@ final String version = context.getProperty(VERSION).evaluateAttributeExpressions
         StringBuilder data = new StringBuilder();
         data.append(method).append("\n");
         data.append(endpoint.getHost());
-        //data.append("\n/");
-        data.append("\n" + endpoint.getPath()) ;
+        data.append("\n");
+        data.append("/" + apiSection + "/" + apiVersion);
         data.append("\n");
         return buildQueryString(parameters, data);
-
-
     }
-    private static String generateUrl(Map<String, String> parameters, String serviceUrl)
+
+    private static String generateUrl(Map<String, String> parameters, String serviceUrl, String apiSection, String apiVersion)
             throws SignatureException, URISyntaxException {
 
         // Set endpoint value
         URI endpoint = new URI(serviceUrl.toLowerCase());
         // Create flattened (String) representation
-        StringBuilder data = new StringBuilder("https://" + endpoint.getHost() +"/" + endpoint.getPath() +"?");
+        StringBuilder data = new StringBuilder("https://" + endpoint.getHost() + "/" + apiSection + "/" + apiVersion +"?");
         return buildQueryString(parameters, data);
 
     }
@@ -360,7 +368,7 @@ final String version = context.getProperty(VERSION).evaluateAttributeExpressions
         String signatureBase64 = new String(Base64.encodeBase64(signature),
                 CHARACTER_ENCODING);
 
-        return new String(signatureBase64);
+        return signatureBase64;
     }
 
     private static String urlEncode(String rawValue) {
