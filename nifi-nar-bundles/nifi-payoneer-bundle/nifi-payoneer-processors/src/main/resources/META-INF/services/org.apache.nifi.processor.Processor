@@ -15,3 +15,4 @@
 org.apache.nifi.processors.payoneer.HBaseMultipleLockProcessor
 org.apache.nifi.processors.payoneer.HBaseMultipleLockReleaseProcessor
 org.apache.nifi.processors.payoneer.AmazonMwsSigningProcessor
+org.apache.nifi.processors.payoneer.XSLTProcessor
